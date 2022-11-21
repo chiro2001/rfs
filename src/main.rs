@@ -31,7 +31,7 @@ mod tests {
     fn test_hello() {
         env_logger::init();
         // let mountpoint = env::args_os().nth(1).unwrap();
-        let mountpoint = "/home/chiro/mnt";
+        let mountpoint = "tests/mnt";
         let options = ["-o", "ro", "-o", "fsname=hello"]
             .iter()
             .map(|o| o.as_ref())
