@@ -6,5 +6,23 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+cxx = "1.0"
+lazy_static = "1.4.0"
+mut_static = "5.0.0"
 fuse = { git = "https://github.com/zargony/fuse-rs" }
-rfs_lib = { path = "./rfs_lib" }
+libc = "0.2.137"
+env_logger = "0.9.3"
+
+[lib]
+crate-type = ["staticlib"]
+
+[profile.release]
+debug = true
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
+
+[[bin]]
+name = "rfs_run"
+path = "src/main.rs"
