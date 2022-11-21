@@ -132,7 +132,7 @@ function mkdir_and_check () {
     if [ ! -d "$DIR" ]; then
         mkdir "$DIR"
         if ! stat "$DIR" > /dev/null; then
-            fail "$TEST_CASE: 目录$DIR创建失败, 请确保能够通过mkdir测试"
+            fail "$TEST_CASE: 目录\$DIR创建失败, 请确保能够通过mkdir测试"
             exit
         fi
     fi
@@ -143,7 +143,7 @@ function touch_and_check () {
     if [ ! -f "$FILE" ]; then
         touch "$FILE"
         if ! stat "$FILE" > /dev/null; then
-            fail "$TEST_CASE: 文件$FILE创建失败, 请确保能够通过touch测试"
+            fail "$TEST_CASE: 文件\$FILE创建失败, 请确保能够通过touch测试"
             exit
         fi
     fi
