@@ -23,7 +23,7 @@ function fail() {
 function test_mount() {
     TEST_CASE=$1
     echo ">>>>>>>>>>>>>>>>>>>> TEST_MOUNT"
-    ../build/${PROJECT_NAME} --device="$HOME"/ddriver ${MNTPOINT}
+    cargo run -- --device="$HOME"/ddriver ${MNTPOINT}
     if [ $? -ne 0 ]; then
         fail $TEST_CASE
         exit 1
@@ -115,12 +115,12 @@ function test_remount() {
     fi
     pass "-> fusermount -u ${MNTPOINT}"
 
-    ../build/${PROJECT_NAME} --device="$HOME"/ddriver ${MNTPOINT}
+    cargo run -- --device="$HOME"/ddriver ${MNTPOINT}
     if [ $? -ne 0 ]; then
         fail "remount"
         exit 1
     fi
-    pass "-> ../build/${PROJECT_NAME} --device=""$HOME""/ddriver ${MNTPOINT}"
+    pass "-> cargo run -- --device=""$HOME""/ddriver ${MNTPOINT}"
     
     core_tester ls ${MNTPOINT}/;
     core_tester ls ${MNTPOINT}/dir0;

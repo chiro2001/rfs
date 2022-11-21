@@ -96,7 +96,7 @@ function fail() {
 
 # Utils
 function mount_fuse() {
-    "$ROOT_PATH"/../build/"${PROJECT_NAME}" --device="$HOME"/ddriver "${MNTPOINT}"
+    cargo run -- --device="$HOME"/ddriver "${MNTPOINT}"
 }
 
 function check_mount() {

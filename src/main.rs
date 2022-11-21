@@ -38,4 +38,19 @@ mod tests {
             .collect::<Vec<&OsStr>>();
         fuse::mount(HelloFS, &mountpoint, &options).unwrap();
     }
+
+    #[test]
+    fn run_tests() {
+        use std::process::{Command, Stdio};
+        use execute::Execute;
+        use std::env;
+        use std::path::Path;
+        let test_root = Path::new("./tests");
+        assert!(env::set_current_dir(&test_root).is_ok());
+        println!("Successfully changed working directory to {}!", test_root.display());
+        let mut command = execute::command_args!("./test.sh");
+        command.stdout(Stdio::piped());
+        let output = command.execute_output().unwrap();
+        println!("{}", String::from_utf8(output.stdout).unwrap());
+    }
 }

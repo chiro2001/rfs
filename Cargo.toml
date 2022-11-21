@@ -12,6 +12,7 @@ mut_static = "5.0.0"
 fuse = { git = "https://github.com/zargony/fuse-rs" }
 libc = "0.2.137"
 env_logger = "0.9.3"
+execute = "0.2.11"
 
 [lib]
 crate-type = ["staticlib"]
