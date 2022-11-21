@@ -96,12 +96,11 @@ function fail() {
 
 # Utils
 function mount_fuse() {
-    echo mount_fuse
     cargo run -- --device="$HOME"/ddriver "${MNTPOINT}"
 }
 
 function check_mount() {
-    if ! mount | grep "${PROJECT_NAME}" >/dev/null; then
+    if ! mount | grep -e "\s${PROJECT_NAME}\s" >/dev/null; then
         return 1
     fi
     return 0

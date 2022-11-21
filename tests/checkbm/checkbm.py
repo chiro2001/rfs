@@ -33,7 +33,7 @@ parser.add_argument("-r", "--rules", help="absolute path of golden rule json fil
 args = parser.parse_args() 
 
 if args.layout == None:
-    fslayout = root + "/../../include/fs.layout"
+    fslayout = root + "/../../config/fs.layout"
 else:
     fslayout = args.layout
 
