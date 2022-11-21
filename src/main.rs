@@ -10,9 +10,7 @@ mod hello;
 fn main() -> Result<()> {
     let matches = command!() // requires `cargo` feature
         .arg(arg!([mountpoint] "Optional mountpoint to mount on")
-            .default_value("/home/chiro/mnt"))
-            // why?
-            // .default_value("/home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt"))
+            .default_value("tests/mnt"))
         .arg(
             arg!(-d --device <FILE> "Device path (filesystem storage file)")
                 .required(false)
