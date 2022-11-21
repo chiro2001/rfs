@@ -9,6 +9,8 @@ use fork::{Fork, fork};
 use lazy_static::lazy_static;
 use nix::sys::signal;
 use mut_static::MutStatic;
+use retry::delay::Fixed;
+use retry::{OperationResult, retry_with_index};
 
 mod lib;
 mod hello;
@@ -38,16 +40,21 @@ fn main() -> Result<()> {
     let abspath_mountpoint = path_mountpoint.to_str().unwrap();
     // let abspath_device = path_device.to_str().unwrap();
     println!("Device: {}", device);
-    println!("Mounting to {}", abspath_mountpoint);
 
     MOUNT_POINT.set(abspath_mountpoint.clone().to_string()).unwrap();
 
+    macro_rules! umount {
+        () => {
+            println!("Unmounting {}", MOUNT_POINT.read().unwrap().clone());
+            let mut command = execute::command_args!("fusermount", "-u", MOUNT_POINT.read().unwrap().clone());
+            command.stdout(Stdio::piped());
+            let output = command.execute_output().unwrap();
+            println!("{}", String::from_utf8(output.stdout).unwrap());
+        };
+    }
+
     pub extern "C" fn signal_handler(_: i32) {
-        println!("Unmounting {}", MOUNT_POINT.read().unwrap().clone());
-        let mut command = execute::command_args!("fusermount", "-u", MOUNT_POINT.read().unwrap().clone());
-        command.stdout(Stdio::piped());
-        let output = command.execute_output().unwrap();
-        println!("{}", String::from_utf8(output.stdout).unwrap());
+        umount!();
         println!("All Done.");
         std::process::exit(0);
     }
@@ -59,9 +66,7 @@ fn main() -> Result<()> {
     );
     unsafe {
         match signal::sigaction(signal::SIGINT, &sig_action) {
-            Ok(_) => {
-                println!("SIGINT signal has been set.");
-            }
+            Ok(_) => {}
             Err(e) => {
                 println!("SIGINT signal set failed, {:?}", e);
             }
@@ -72,16 +77,36 @@ fn main() -> Result<()> {
         .iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
+    let retry_times = 3;
     match if matches.get_flag("front") { Ok(Fork::Child) } else { fork() } {
         Ok(Fork::Parent(child)) => {
             println!("Daemon running at pid: {}", child);
             Ok(())
         }
         Ok(Fork::Child) => {
-            // fuse::mount(lib::RFS, &mountpoint, &options).unwrap();
-            fuse::mount(HelloFS, abspath_mountpoint, &options).unwrap();
-            println!("All Done.");
-            Ok(())
+            match retry_with_index(Fixed::from_millis(100), |current_try| {
+                println!("Mounting to {}", abspath_mountpoint);
+                // fuse::mount(lib::RFS, &mountpoint, &options).unwrap();
+                let res = fuse::mount(HelloFS, abspath_mountpoint, &options);
+                match res {
+                    Ok(_) => {
+                        println!("All Done.");
+                        OperationResult::Ok(())
+                    }
+                    Err(e) => {
+                        if current_try > retry_times {
+                            OperationResult::Err(format!("Failed to mount after {} retries! Err: {}", retry_times, e))
+                        } else {
+                            umount!();
+                            println!("Umount Done.");
+                            OperationResult::Retry(format!("Failed to mount, trying to umount..."))
+                        }
+                    }
+                }
+            }) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(anyhow!("Mount failed with {}", e))
+            }
         }
         Err(e) => Err(anyhow!("Fork returns error {}", e)),
     }
