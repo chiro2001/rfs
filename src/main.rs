@@ -1,12 +1,21 @@
 use std::ffi::OsStr;
 use std::fs;
+use std::process::Stdio;
 use clap::{arg, ArgAction, command};
 use crate::hello::HelloFS;
 use anyhow::{anyhow, Result};
+use execute::Execute;
 use fork::{Fork, fork};
+use lazy_static::lazy_static;
+use nix::sys::signal;
+use mut_static::MutStatic;
 
 mod lib;
 mod hello;
+
+lazy_static! {
+    pub static ref MOUNT_POINT: MutStatic<String> = MutStatic::new();
+}
 
 fn main() -> Result<()> {
     let matches = command!() // requires `cargo` feature
@@ -30,6 +39,35 @@ fn main() -> Result<()> {
     // let abspath_device = path_device.to_str().unwrap();
     println!("Device: {}", device);
     println!("Mounting to {}", abspath_mountpoint);
+
+    MOUNT_POINT.set(abspath_mountpoint.clone().to_string()).unwrap();
+
+    pub extern "C" fn signal_handler(_: i32) {
+        println!("Unmounting {}", MOUNT_POINT.read().unwrap().clone());
+        let mut command = execute::command_args!("fusermount", "-u", MOUNT_POINT.read().unwrap().clone());
+        command.stdout(Stdio::piped());
+        let output = command.execute_output().unwrap();
+        println!("{}", String::from_utf8(output.stdout).unwrap());
+        println!("All Done.");
+        std::process::exit(0);
+    }
+
+    let sig_action = signal::SigAction::new(
+        signal::SigHandler::Handler(signal_handler),
+        signal::SaFlags::SA_NODEFER,
+        signal::SigSet::empty(),
+    );
+    unsafe {
+        match signal::sigaction(signal::SIGINT, &sig_action) {
+            Ok(_) => {
+                println!("SIGINT signal has been set.");
+            }
+            Err(e) => {
+                println!("SIGINT signal set failed, {:?}", e);
+            }
+        }
+    }
+
     let options = ["-o", "ro", "-o", "fsname=rfs"]
         .iter()
         .map(|o| o.as_ref())
