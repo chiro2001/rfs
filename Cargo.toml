@@ -13,6 +13,8 @@ fuse = { git = "https://github.com/zargony/fuse-rs" }
 libc = "0.2.137"
 env_logger = "0.9.3"
 execute = "0.2.11"
+clap = { version = "4.0.26", features = ["cargo"] }
+anyhow = "1.0.66"
 
 [lib]
 crate-type = ["staticlib"]

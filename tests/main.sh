@@ -96,6 +96,7 @@ function fail() {
 
 # Utils
 function mount_fuse() {
+    echo mount_fuse
     cargo run -- --device="$HOME"/ddriver "${MNTPOINT}"
 }
 

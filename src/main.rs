@@ -1,16 +1,42 @@
 use std::ffi::OsStr;
+use std::fs;
+use clap::{arg, command};
+use crate::hello::HelloFS;
+use anyhow::Result;
 
 mod lib;
 mod hello;
 
-fn main() {
-    println!("mounting...");
-    let mountpoint = "/home/chiro/mnt";
+fn main() -> Result<()> {
+    let matches = command!() // requires `cargo` feature
+        .arg(arg!([mountpoint] "Optional mountpoint to mount on")
+            .default_value("/home/chiro/mnt"))
+            // why?
+            // .default_value("/home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt"))
+        .arg(
+            arg!(-d --device <FILE> "Device path (filesystem storage file)")
+                .required(false)
+                .default_value("ddriver"),
+        )
+        .get_matches();
+
+    env_logger::init();
+    let mountpoint = matches.get_one::<String>("mountpoint").unwrap();
+    let device = matches.get_one::<String>("device").unwrap();
+    let path_mountpoint = fs::canonicalize(mountpoint)?;
+    // let path_device = fs::canonicalize(device)?;
+    let abspath_mountpoint = path_mountpoint.to_str().unwrap();
+    // let abspath_device = path_device.to_str().unwrap();
+    println!("Device: {}", device);
+    println!("Mounting to {}", abspath_mountpoint);
     let options = ["-o", "ro", "-o", "fsname=rfs"]
         .iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
-    fuse::mount(lib::RFS, &mountpoint, &options).unwrap();
+    // fuse::mount(lib::RFS, &mountpoint, &options).unwrap();
+    fuse::mount(HelloFS, abspath_mountpoint, &options).unwrap();
+    println!("All done.");
+    Ok(())
 }
 
 #[cfg(test)]
@@ -19,7 +45,9 @@ mod tests {
     use fuse::Filesystem;
     // use std::env;
     use std::ffi::OsStr;
+    use std::fs;
     use hello::HelloFS;
+    use anyhow::Result;
 
     #[test]
     fn simple_fuse() {
@@ -28,20 +56,24 @@ mod tests {
     }
 
     #[test]
-    fn test_hello() {
+    fn test_hello() -> Result<()> {
         env_logger::init();
         // let mountpoint = env::args_os().nth(1).unwrap();
-        let mountpoint = "tests/mnt";
+        let path = fs::canonicalize("tests/mnt")?;
+        let mountpoint = path.to_str().unwrap();
+        // let mountpoint = "/home/chiro/mnt";
+        println!("mountpoint is {}", mountpoint);
         let options = ["-o", "ro", "-o", "fsname=hello"]
             .iter()
             .map(|o| o.as_ref())
             .collect::<Vec<&OsStr>>();
-        fuse::mount(HelloFS, &mountpoint, &options).unwrap();
+        fuse::mount(HelloFS, mountpoint, &options).unwrap();
+        Ok(())
     }
 
     #[test]
     fn run_tests() {
-        use std::process::{Command, Stdio};
+        use std::process::Stdio;
         use execute::Execute;
         use std::env;
         use std::path::Path;
