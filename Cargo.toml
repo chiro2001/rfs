@@ -15,6 +15,7 @@ env_logger = "0.9.3"
 execute = "0.2.11"
 clap = { version = "4.0.26", features = ["cargo"] }
 anyhow = "1.0.66"
+fork = "0.1.20"
 
 [lib]
 crate-type = ["staticlib"]

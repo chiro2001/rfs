@@ -1,8 +1,9 @@
 use std::ffi::OsStr;
 use std::fs;
-use clap::{arg, command};
+use clap::{arg, ArgAction, command};
 use crate::hello::HelloFS;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use fork::{Fork, fork};
 
 mod lib;
 mod hello;
@@ -11,8 +12,10 @@ fn main() -> Result<()> {
     let matches = command!() // requires `cargo` feature
         .arg(arg!([mountpoint] "Optional mountpoint to mount on")
             .default_value("tests/mnt"))
+        .arg(arg!(-f --front "Keep daemon running in front").action(ArgAction::SetTrue)
+            .required(false))
         .arg(
-            arg!(-d --device <FILE> "Device path (filesystem storage file)")
+            arg!(--device <FILE> "Device path (filesystem storage file)")
                 .required(false)
                 .default_value("ddriver"),
         )
@@ -31,10 +34,19 @@ fn main() -> Result<()> {
         .iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
-    // fuse::mount(lib::RFS, &mountpoint, &options).unwrap();
-    fuse::mount(HelloFS, abspath_mountpoint, &options).unwrap();
-    println!("All done.");
-    Ok(())
+    match if matches.get_flag("front") { Ok(Fork::Child) } else { fork() } {
+        Ok(Fork::Parent(child)) => {
+            println!("Daemon running at pid: {}", child);
+            Ok(())
+        }
+        Ok(Fork::Child) => {
+            // fuse::mount(lib::RFS, &mountpoint, &options).unwrap();
+            fuse::mount(HelloFS, abspath_mountpoint, &options).unwrap();
+            println!("All Done.");
+            Ok(())
+        }
+        Err(e) => Err(anyhow!("Fork returns error {}", e)),
+    }
 }
 
 #[cfg(test)]

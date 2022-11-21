@@ -155,6 +155,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ba569491c70ec8471e34aa7e9c0b9e82bb5d2464c0398442d17d3c4af814e5a"
 
 [[package]]
+name = "fork"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9788ce090af4bf8d6e8f43d3f7d12305c787456387bd2d88856fcda3aa1f0dca"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "fuse"
 version = "0.4.0-dev"
 source = "git+https://github.com/zargony/fuse-rs#39fde4a5c47ce370d228ac190f950bd835db7f47"
@@ -311,6 +320,7 @@ dependencies = [
  "cxx",
  "env_logger",
  "execute",
+ "fork",
  "fuse",
  "lazy_static",
  "libc",
