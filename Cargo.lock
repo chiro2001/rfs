@@ -107,6 +107,9 @@ dependencies = [
 [[package]]
 name = "disk_driver"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+]
 
 [[package]]
 name = "env_logger"

@@ -1,3 +1,5 @@
+use anyhow::Result;
+
 #[derive(Default, Debug)]
 pub struct DiskStats {
     pub read_cnt: u32,
@@ -12,7 +14,7 @@ pub struct DiskConst {
     pub seek_lat: u32,
     pub track_num: i32,
     pub major_num: i32,
-    pub layout_size: u32,
+    pub layout_size: u64,
     pub iounit_size: u32,
 }
 
@@ -36,14 +38,20 @@ impl Default for DiskConst {
     }
 }
 
+pub enum SeekType {
+    Set,
+    Cur,
+    End,
+}
+
 /// DiskDriver abstract interface
 pub trait DiskDriver {
-    fn ddriver_open(path: &str) -> i32;
-    fn ddriver_close(fd: i32) -> i32;
-    fn ddriver_seek(fd: i32, offset: i64, whence: i32) -> i32;
-    fn ddriver_write(fd: i32, buf: &[u8], size: usize) -> i32;
-    fn ddriver_read(fd: i32, buf: &[u8], size: usize) -> i32;
-    fn ddriver_ioctl(fd: i32, cmd: u32, arg: &[u8]) -> i32;
+    fn ddriver_open(self: &mut Self, path: &str) -> Result<()>;
+    fn ddriver_close(self: &mut Self) -> Result<()>;
+    fn ddriver_seek(self: &mut Self, offset: i64, whence: SeekType) -> Result<u64>;
+    fn ddriver_write(self: &mut Self, buf: &[u8], size: usize) -> Result<usize>;
+    fn ddriver_read(self: &mut Self, buf: &[u8], size: usize) -> Result<usize>;
+    fn ddriver_ioctl(self: &mut Self, cmd: u32, arg: &[u8]) -> Result<()>;
 }
 
 pub mod memory;
