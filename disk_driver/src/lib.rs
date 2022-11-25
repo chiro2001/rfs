@@ -2,8 +2,8 @@ use anyhow::Result;
 
 #[derive(Default, Debug)]
 pub struct DiskStats {
-    pub read_cnt: u32,
     pub write_cnt: u32,
+    pub read_cnt: u32,
     pub seek_cnt: u32,
 }
 
@@ -50,8 +50,9 @@ pub trait DiskDriver {
     fn ddriver_close(self: &mut Self) -> Result<()>;
     fn ddriver_seek(self: &mut Self, offset: i64, whence: SeekType) -> Result<u64>;
     fn ddriver_write(self: &mut Self, buf: &[u8], size: usize) -> Result<usize>;
-    fn ddriver_read(self: &mut Self, buf: &[u8], size: usize) -> Result<usize>;
-    fn ddriver_ioctl(self: &mut Self, cmd: u32, arg: &[u8]) -> Result<()>;
+    fn ddriver_read(self: &mut Self, buf: &mut [u8], size: usize) -> Result<usize>;
+    fn ddriver_ioctl(self: &mut Self, cmd: u32, arg: &mut [u8]) -> Result<()>;
+    fn ddriver_reset(self: &mut Self) -> Result<()>;
 }
 
 pub mod memory;
