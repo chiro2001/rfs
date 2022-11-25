@@ -3,8 +3,7 @@ use anyhow::Result;
 use crate::*;
 use std::mem::size_of;
 
-// const MEM_DISK_SIZE: usize = 4 * 0x400 * 0x400;
-const MEM_DISK_SIZE: usize = 4 * 0x400 * 0x4;
+const MEM_DISK_SIZE: usize = 4 * 0x400 * 0x400;
 const MEM_DISK_UNIT: usize = 512;
 const IOC_REQ_DEVICE_SIZE: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('A' as u32) << (0 + 8)) | ((0) << 0) | ((size_of::<u32>() as u32) << ((0 + 8) + 8));
 const IOC_REQ_DEVICE_STATE: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('A' as u32) << (0 + 8)) | ((1) << 0) | ((size_of::<u32>() as u32 * 3) << ((0 + 8) + 8));
@@ -13,7 +12,7 @@ const IOC_REQ_DEVICE_IO_SZ: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('A' a
 
 pub struct MemoryDiskDriver {
     pub info: DiskInfo,
-    pub mem: [u8; MEM_DISK_SIZE],
+    pub mem: Vec<u8>,
     pointer: usize,
 }
 
@@ -93,7 +92,7 @@ impl MemoryDiskDriver {
                     ..Default::default()
                 },
             },
-            mem: [0 as u8; MEM_DISK_SIZE],
+            mem: vec![0 as u8; MEM_DISK_SIZE],
             pointer: 0,
         }
     }
