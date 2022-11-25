@@ -44,6 +44,16 @@ pub enum SeekType {
     End,
 }
 
+impl SeekType {
+    pub fn to_int(self: &Self) -> i32 {
+        match self {
+            SeekType::Set => 0,
+            SeekType::Cur => 1,
+            SeekType::End => 2,
+        }
+    }
+}
+
 /// DiskDriver abstract interface
 pub trait DiskDriver {
     fn ddriver_open(self: &mut Self, path: &str) -> Result<()>;
