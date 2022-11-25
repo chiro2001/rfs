@@ -105,6 +105,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "disk_driver"
+version = "0.1.0"
+
+[[package]]
 name = "env_logger"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -409,6 +413,7 @@ dependencies = [
  "anyhow",
  "clap",
  "cxx",
+ "disk_driver",
  "env_logger",
  "execute",
  "fork",

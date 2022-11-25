@@ -18,6 +18,7 @@ anyhow = "1.0.66"
 fork = "0.1.20"
 nix = "0.25.0"
 retry = "2.0.0"
+disk_driver = { path = "disk_driver" }
 
 [lib]
 crate-type = ["staticlib"]
