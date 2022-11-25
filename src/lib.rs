@@ -1,6 +1,8 @@
 use fuse::Filesystem;
 pub use disk_driver;
 
+pub mod utils;
+
 #[cxx::bridge]
 mod ffi {
     extern "Rust" {
