@@ -21,7 +21,7 @@ retry = "2.0.0"
 disk_driver = { path = "disk_driver" }
 
 [lib]
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "rlib"]
 
 [profile.release]
 debug = true

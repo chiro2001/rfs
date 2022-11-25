@@ -109,6 +109,7 @@ name = "disk_driver"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cxx",
 ]
 
 [[package]]

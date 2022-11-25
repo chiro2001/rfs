@@ -1,4 +1,5 @@
 use fuse::Filesystem;
+pub use disk_driver;
 
 #[cxx::bridge]
 mod ffi {
