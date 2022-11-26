@@ -2,7 +2,7 @@
  * Define EXT2_PREALLOCATE to preallocate data blocks for expanding files
  */
 use std::mem::size_of;
-use crate::types::le32;
+use crate::rfs_lib::types::{le16, le32, s16};
 
 pub const EXT2_DEFAULT_PREALLOC_BLOCKS: usize = 8;
 
