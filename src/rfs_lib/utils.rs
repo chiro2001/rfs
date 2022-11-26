@@ -1,4 +1,5 @@
 extern crate core;
+
 // use alloc::vec::Vec;
 use core::mem::{align_of, forget, size_of};
 use core::slice::{from_raw_parts, from_raw_parts_mut};
@@ -97,27 +98,35 @@ fn calc_new_len<T, U>(slice: &[T]) -> usize {
 }
 
 impl<T> SliceExt for [T] {
-    unsafe fn cast<'a, U>(&'a self) -> &'a [U] {
-        assert!(align_of::<T>() % align_of::<U>() == 0);
+    unsafe fn cast<U>(&self) -> &[U] {
+        assert_eq!(align_of::<T>() % align_of::<U>(), 0);
 
         let new_len = calc_new_len::<T, U>(self);
         let new_ptr = self.as_ptr() as *const U;
         from_raw_parts(new_ptr, new_len)
     }
 
-    unsafe fn cast_mut<'a, U>(&'a mut self) -> &'a mut [U] {
-        assert!(align_of::<T>() % align_of::<U>() == 0);
+    unsafe fn cast_mut<U>(&mut self) -> &mut [U] {
+        assert_eq!(align_of::<T>() % align_of::<U>(), 0);
 
         let new_len = calc_new_len::<T, U>(self);
         let new_ptr = self.as_mut_ptr() as *mut U;
         from_raw_parts_mut(new_ptr, new_len)
     }
 
-    unsafe fn cast_mut_force<'a, U>(&'a self) -> &'a mut [U] {
-        assert!(align_of::<T>() % align_of::<U>() == 0);
+    unsafe fn cast_mut_force<U>(&self) -> &mut [U] {
+        assert_eq!(align_of::<T>() % align_of::<U>(), 0);
 
         let new_len = calc_new_len::<T, U>(self);
         let new_ptr = self.as_ptr() as *mut U;
         from_raw_parts_mut(new_ptr, new_len)
     }
+}
+
+pub unsafe fn serialize_row<T: Sized>(src: &T) -> &[u8] {
+    from_raw_parts((src as *const T) as *const u8, size_of::<T>())
+}
+
+pub unsafe fn deserialize_row<T>(src: &[u8]) -> T {
+    std::ptr::read(src.as_ptr() as *const _)
 }

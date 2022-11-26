@@ -308,7 +308,7 @@ pub const EXT2_LABEL_LEN: usize = 16;
 /*
  * Structure of the super block
  */
-struct Ext2SuperBlock {
+pub struct Ext2SuperBlock {
     /*000*/ pub s_inodes_count: u32,      /* Inodes count */
     pub s_blocks_count: u32,              /* Blocks count */
     pub s_r_blocks_count: u32,            /* Reserved blocks count */
@@ -456,7 +456,8 @@ impl Default for Ext2SuperBlock {
             s_wtime: 0,
             s_mnt_count: 0,
             s_max_mnt_count: 0,
-            s_magic: EXT2_SUPER_MAGIC,
+            // s_magic: EXT2_SUPER_MAGIC,
+            s_magic: 0,
             s_state: 0,
             s_errors: 0,
             s_minor_rev_level: 0,

@@ -4,10 +4,14 @@ use fuse::{Filesystem, ReplyEntry, Request};
 pub use disk_driver;
 use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use libc::c_int;
+use anyhow::Result;
 
 pub mod utils;
 pub mod desc;
 pub mod types;
+
+use desc::Ext2SuperBlock;
+use utils::deserialize_row;
 
 #[cxx::bridge]
 mod ffi {
@@ -28,6 +32,11 @@ pub struct RFS {
 impl RFS {
     pub fn new(driver: Box<dyn DiskDriver>) -> Self {
         Self { driver, driver_info: Default::default() }
+    }
+
+    fn read_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
+        assert_eq!(buf.len(), self.driver_info.consts.iounit_size as usize);
+        Ok(())
     }
 }
 
@@ -58,6 +67,11 @@ impl Filesystem for RFS {
             return Err(1);
         }
         println!("disk info: {:?}", self.driver_info);
+        // read super block
+        let mut data_block0 = [0 as u8].repeat(self.driver_info.consts.iounit_size as usize);
+        result_to_int(self.read_block(&mut data_block0))?;
+        let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_block0) };
+        println!("read magic: {}", super_block.s_magic);
         Ok(())
     }
 
