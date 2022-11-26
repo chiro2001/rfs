@@ -15,7 +15,7 @@ use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
 use rfs::RFS;
 
-mod lib;
+mod rfs_lib;
 mod hello;
 // mod utils;
 
