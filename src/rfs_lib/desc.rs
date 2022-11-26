@@ -63,6 +63,7 @@ struct Ext2AclEntry /* Access Control List Entry */
 /*
  * Structure of a blocks group descriptor
  */
+#[derive(Default)]
 pub struct Ext2GroupDesc {
     pub bg_block_bitmap: u32,      /* Blocks bitmap block */
     pub bg_inode_bitmap: u32,      /* Inodes bitmap block */

@@ -1,6 +1,5 @@
 extern crate core;
 
-// use alloc::vec::Vec;
 use core::mem::{align_of, forget, size_of};
 use core::slice::{from_raw_parts, from_raw_parts_mut};
 

@@ -9,9 +9,12 @@ use anyhow::Result;
 pub mod utils;
 pub mod desc;
 pub mod types;
+pub mod mem;
+pub mod macros;
 
 use desc::Ext2SuperBlock;
 use utils::deserialize_row;
+use desc::Ext2GroupDesc;
 
 #[cxx::bridge]
 mod ffi {
@@ -35,15 +38,16 @@ impl RFS {
     }
 
     fn disk_block_size(self: &mut Self) -> usize { self.driver_info.consts.iounit_size as usize }
+    // fn block_size(self: &mut Self) -> usize { self. as usize }
 
-    fn read_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
+    fn read_disk_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
         assert_eq!(buf.len(), self.disk_block_size());
         Ok(())
     }
 
-    fn read_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
+    fn read_disk_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
         let sz = self.disk_block_size();
-        for i in 0..count { self.read_block(&mut buf[(i * sz)..((i + 1) * sz)])? }
+        for i in 0..count { self.read_disk_block(&mut buf[(i * sz)..((i + 1) * sz)])? }
         Ok(())
     }
 }
@@ -78,12 +82,14 @@ impl Filesystem for RFS {
         // read super block
         let super_blk_count = size_of::<Ext2SuperBlock>() / self.disk_block_size();
         let mut data_blocks_head = [0 as u8].repeat((self.disk_block_size() * super_blk_count) as usize);
-        result_to_int(self.read_blocks(&mut data_blocks_head, super_blk_count))?;
+        result_to_int(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
         let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_blocks_head) };
         println!("read magic: {}", super_block.s_magic);
         if !super_block.magic_matched() {
             println!("fs not found! creating super block...");
+            let mut group_desc = Ext2GroupDesc::default();
             super_block = Ext2SuperBlock::default();
+            // super_block.s_log_block_size
         }
         println!("Init done.");
         Ok(())
