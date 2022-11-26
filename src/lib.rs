@@ -1,5 +1,6 @@
 use fuse::Filesystem;
 pub use disk_driver;
+use disk_driver::DiskDriver;
 
 pub mod utils;
 
@@ -14,10 +15,17 @@ pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
 
-pub struct RFS;
-impl Filesystem for RFS {
-
+pub struct RFS {
+    pub driver: Box<dyn DiskDriver>,
 }
+
+impl RFS {
+    pub fn new(driver: Box<dyn DiskDriver>) -> Self {
+        Self { driver }
+    }
+}
+
+impl Filesystem for RFS {}
 
 #[cfg(test)]
 mod tests {
