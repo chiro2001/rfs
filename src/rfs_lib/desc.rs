@@ -42,29 +42,18 @@ pub const EXT2_LINK_MAX: usize = 65000;
  * Structure of a blocks group descriptor
  */
 pub struct Ext2GroupDesc {
-    /* Blocks bitmap block */
-    pub bg_block_bitmap: u32,
-    /* Inodes bitmap block */
-    pub bg_inode_bitmap: u32,
-    /* Inodes table block */
-    pub bg_inode_table: u32,
-    /* Free blocks count */
-    pub bg_free_blocks_count: u16,
-    /* Free inodes count */
-    pub bg_free_inodes_count: u16,
-    /* Directories count */
-    pub bg_used_dirs_count: u16,
+    pub bg_block_bitmap: u32,      /* Blocks bitmap block */
+    pub bg_inode_bitmap: u32,      /* Inodes bitmap block */
+    pub bg_inode_table: u32,       /* Inodes table block */
+    pub bg_free_blocks_count: u16, /* Free blocks count */
+    pub bg_free_inodes_count: u16, /* Free inodes count */
+    pub bg_used_dirs_count: u16,   /* Directories count */
     pub bg_flags: u16,
-    /* Exclude bitmap for snapshots */
-    pub bg_exclude_bitmap_lo: u32,
-    /* crc32c(s_uuid+grp_num+bitmap) LSB */
-    pub bg_block_bitmap_csum_lo: u16,
-    /* crc32c(s_uuid+grp_num+bitmap) LSB */
-    pub bg_inode_bitmap_csum_lo: u16,
-    /* Unused inodes count */
-    pub bg_itable_unused: u16,
-    /* crc16(s_uuid+group_num+group_desc)*/
-    pub bg_checksum: u16,
+    pub bg_exclude_bitmap_lo: u32,    /* Exclude bitmap for snapshots */
+    pub bg_block_bitmap_csum_lo: u16, /* crc32c(s_uuid+grp_num+bitmap) LSB */
+    pub bg_inode_bitmap_csum_lo: u16, /* crc32c(s_uuid+grp_num+bitmap) LSB */
+    pub bg_itable_unused: u16,        /* Unused inodes count */
+    pub bg_checksum: u16,             /* crc16(s_uuid+group_num+group_desc)*/
 }
 
 pub const EXT2_BG_INODE_UNINIT: usize = 0x0001 /* Inode table/bitmap not initialized */;
@@ -267,7 +256,7 @@ pub const EXT2_LABEL_LEN: usize = 16;
 /*
  * Structure of the super block
  */
-struct ext2_super_block {
+struct Ext2SuperBlock {
     /*000*/ pub s_inodes_count: u32,      /* Inodes count */
     pub s_blocks_count: u32,              /* Blocks count */
     pub s_r_blocks_count: u32,            /* Reserved blocks count */
@@ -357,7 +346,7 @@ struct ext2_super_block {
     pub s_snapshot_id: u32,                /* sequential ID of active snapshot */
     pub s_snapshot_r_blocks_count: u64,    /* active snapshot reserved blocks */
     /*190*/ pub s_snapshot_list: u32,      /* inode number of disk snapshot list */
-    // pub const EXT4_S_ERR_START: usize = ext4_offsetof;(struct ext2_super_block, s_error_count)
+    // pub const EXT4_S_ERR_START: usize = ext4_offsetof;(struct Ext2SuperBlock, s_error_count)
     pub s_error_count: u32,                     /* number of fs errors */
     pub s_first_error_time: u32,                /* first time an error happened */
     pub s_first_error_ino: u32,                 /* inode involved in first error */
@@ -370,7 +359,7 @@ struct ext2_super_block {
     pub s_last_error_line: u32,          /* line number where error happened */
     pub s_last_error_block: u64,         /* block involved of last error */
     /*1e0*/ pub s_last_error_func: [u8; 32], /* function where error hit, no NUL? */
-    // pub const EXT4_S_ERR_END: usize = ext4_offsetof;(struct ext2_super_block, s_mount_opts)
+    // pub const EXT4_S_ERR_END: usize = ext4_offsetof;(struct Ext2SuperBlock, s_mount_opts)
     /*200*/ pub s_mount_opts: [u8; 64],   /* default mount options, no NUL? */
     /*240*/ pub s_usr_quota_inum: u32,     /* inode number of user quota file */
     pub s_grp_quota_inum: u32,             /* inode number of group quota file */
@@ -486,7 +475,7 @@ pub const EXT2_FEATURE_RO_COMPAT_SUPP: usize =
  */
 pub const EXT2_NAME_LEN: usize = 255;
 
-struct ext2_dir_entry {
+struct Ext2DirEntry {
     pub inode: u32,              /* Inode number */
     pub rec_len: u16,            /* Directory entry length */
     pub name_len: u16,           /* Name length */
@@ -500,14 +489,14 @@ struct ext2_dir_entry {
  * file_type field.
  *
  * This structure is deprecated due to endian issues. Please use struct
- * ext2_dir_entry and accessor functions
+ * Ext2DirEntry and accessor functions
  *   ext2fs_dirent_name_len
  *   ext2fs_dirent_set_name_len
  *   ext2fs_dirent_file_type
  *   ext2fs_dirent_set_file_type
  * to get and set name_len and file_type fields.
  */
-struct ext2_dir_entry_2 {
+struct Ext2DirEntry2 {
     pub inode: u32,   /* Inode number */
     pub rec_len: u16, /* Directory entry length */
     pub name_len: u8, /* Name length */
@@ -520,7 +509,7 @@ struct ext2_dir_entry_2 {
  * This is located at the first 4 bit aligned location after the name.
  */
 
-struct ext2_dir_entry_hash {
+struct Ext2DirEntryHash {
     pub hash: le32,
     pub minor_hash: le32,
 }
@@ -529,7 +518,7 @@ struct ext2_dir_entry_hash {
  * This is a bogus directory entry at the end of each leaf block that
  * records checksums.
  */
-struct ext2_dir_entry_tail {
+struct Ext2DirEntryTail {
     pub det_reserved_zero1: u32,    /* Pretend to be unused */
     pub det_rec_len: u16,           /* 12 */
     pub det_reserved_name_len: u16, /* 0xDE00, fake namelen/filetype */
@@ -552,8 +541,8 @@ pub const EXT2_FT_SYMLINK: usize = 7;
 pub const EXT2_FT_MAX: usize = 8;
 
 /*
- * Annoyingly, e2fsprogs always swab16s ext2_dir_entry.name_len, so we
- * have to build ext2_dir_entry_tail with that assumption too.  This
+ * Annoyingly, e2fsprogs always swab16s Ext2DirEntry.name_len, so we
+ * have to build Ext2DirEntryTail with that assumption too.  This
  * constant helps to build the dir_entry_tail to look like it has an
  * "invalid" file type.
  */
@@ -600,7 +589,7 @@ pub const EXT4_MMP_SEQ_FSCK: usize = 0xE24D4D50  /* mmp_seq value when being fsc
 pub const EXT4_MMP_SEQ_MAX: usize = 0xE24D4D4F   /* maximum valid mmp_seq value */;
 
 /* Not endian-annotated; it's swapped at read/write time */
-struct mmp_struct {
+struct MmpStruct {
     pub mmp_magic: u32,                   /* Magic number for MMP */
     pub mmp_seq: u32,                     /* Sequence no. updated periodically */
     pub mmp_time: u64,                    /* Time last updated (seconds) */
