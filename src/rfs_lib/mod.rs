@@ -1,9 +1,9 @@
 use std::ffi::OsStr;
+use std::mem::size_of;
 use fuse::{Filesystem, ReplyEntry, Request};
 pub use disk_driver;
-use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_SIZE};
+use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use libc::c_int;
-use crate::desc::Ext2INode;
 
 pub mod utils;
 pub mod desc;
@@ -22,7 +22,7 @@ pub fn add(left: usize, right: usize) -> usize {
 
 pub struct RFS {
     pub driver: Box<dyn DiskDriver>,
-    pub driver_info: DiskInfo
+    pub driver_info: DiskInfo,
 }
 
 impl RFS {
@@ -31,13 +31,33 @@ impl RFS {
     }
 }
 
+fn result_to_int<E: std::fmt::Debug>(res: Result<(), E>) -> Result<(), c_int> {
+    match res {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            println!("RFS Error: {:#?}", e);
+            Err(1)
+        }
+    }
+}
+
 impl Filesystem for RFS {
     fn init(&mut self, _req: &Request<'_>) -> Result<(), c_int> {
-        self.driver.ddriver_open("disk")?;
-        // check size
-        let mut buf = [0 as u8; 32];
-        self.driver.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf)?;
-        self.driver_info.consts.layout_size = u32::from_be_bytes()
+        let file = "disk";
+        result_to_int(self.driver.ddriver_open(file))?;
+        // get and check size
+        let mut buf = [0 as u8; 4];
+        result_to_int(self.driver.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf))?;
+        self.driver_info.consts.layout_size = u32::from_be_bytes(buf.clone());
+        result_to_int(self.driver.ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf))?;
+        self.driver_info.consts.iounit_size = u32::from_be_bytes(buf.clone());
+        // at lease 32 blocks
+        println!("Disk {} has {} blocks.", file, self.driver_info.consts.disk_blocks());
+        if self.driver_info.consts.disk_blocks() < 32 {
+            println!("Too small disk!");
+            return Err(1);
+        }
+        println!("disk info: {:?}", self.driver_info);
         Ok(())
     }
 

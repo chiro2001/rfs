@@ -25,6 +25,12 @@ pub struct DiskInfo {
     pub consts: DiskConst,
 }
 
+impl DiskConst {
+    pub fn disk_blocks(self: &Self) -> usize {
+        (self.layout_size / self.iounit_size).try_into().unwrap()
+    }
+}
+
 impl Default for DiskConst {
     fn default() -> Self {
         Self {
