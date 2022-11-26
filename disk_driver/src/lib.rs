@@ -75,7 +75,7 @@ pub mod memory;
 pub mod file;
 
 fn driver_tester(driver: &mut dyn DiskDriver) -> Result<()> {
-    driver.ddriver_open("test")?;
+    driver.ddriver_open("/home/chiro/ddriver")?;
     let mut buf = [0; size_of::<u32>()];
     driver.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf)?;
     let disk_size = u32::from_be_bytes(buf.clone()) as usize;

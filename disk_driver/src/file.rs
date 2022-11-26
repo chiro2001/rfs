@@ -1,3 +1,6 @@
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::Path;
 use crate::{DiskConst, DiskDriver, DiskInfo, SeekType};
 use anyhow::Result;
 use crate::*;
@@ -7,13 +10,32 @@ const FILE_DISK_UNIT: usize = 512;
 
 pub struct FileDiskDriver {
     pub info: DiskInfo,
-    pub mem: Vec<u8>,
-    pointer: usize,
+    pub file: Option<File>,
+}
+
+impl FileDiskDriver {
+    fn get_file(self: &mut Self) -> &File {
+        self.file.as_ref().unwrap()
+    }
+    fn blank_data(self: &mut Self) -> Vec<u8> {
+        [0 as u8].repeat(self.info.consts.layout_size as usize)
+    }
 }
 
 impl DiskDriver for FileDiskDriver {
     fn ddriver_open(self: &mut Self, path: &str) -> Result<()> {
         println!("FileDrv open: {}", path);
+        if !Path::new(path).exists() {
+            println!("Create a new file {}", path);
+            File::create(path)?.write_all(&self.blank_data())?;
+        }
+        self.file = Some(OpenOptions::new().read(true).write(true).open(path)?);
+        let filesize = self.get_file().metadata()?.len();
+        // padding zero to filesize
+        if filesize < self.info.consts.layout_size.into() {
+            let padding = self.info.consts.layout_size as usize - filesize as usize;
+            self.ddriver_write(&[0 as u8].repeat(padding), padding)?;
+        }
         Ok(())
     }
 
@@ -22,25 +44,21 @@ impl DiskDriver for FileDiskDriver {
     }
 
     fn ddriver_seek(self: &mut Self, offset: i64, whence: SeekType) -> Result<u64> {
-        match whence {
-            SeekType::Set => self.pointer = offset as usize,
-            SeekType::Cur => self.pointer = (self.pointer as i64 + offset) as usize,
-            SeekType::End => self.pointer = (self.info.consts.layout_size as i64 - offset) as usize,
-        };
-        Ok(self.pointer as u64)
+        Ok(self.get_file().seek(match whence {
+            SeekType::Set => SeekFrom::Start(offset as u64),
+            SeekType::Cur => SeekFrom::Current(offset),
+            SeekType::End => SeekFrom::End(offset),
+        })?)
     }
 
     fn ddriver_write(self: &mut Self, buf: &[u8], size: usize) -> Result<usize> {
         assert!(buf.len() >= size);
-        self.get_pointer_slice(size).copy_from_slice(&buf[..size]);
-        self.pointer += size;
+        self.get_file().write_all(&buf[..size])?;
         Ok(size)
     }
 
     fn ddriver_read(self: &mut Self, buf: &mut [u8], size: usize) -> Result<usize> {
-        buf[..size].copy_from_slice(self.get_pointer_slice(size));
-        self.pointer += size;
-        Ok(size)
+        Ok(self.get_file().read(&mut buf[..size])?)
     }
 
     fn ddriver_ioctl(self: &mut Self, cmd: u32, arg: &mut [u8]) -> Result<()> {
@@ -68,16 +86,15 @@ impl DiskDriver for FileDiskDriver {
     }
 
     fn ddriver_reset(self: &mut Self) -> Result<()> {
-        self.mem.copy_from_slice(&[0; FILE_DISK_SIZE]);
+        self.ddriver_write(&[0].repeat(self.info.consts.layout_size as usize), self.info.consts.layout_size.try_into().unwrap())?;
         // TODO: write superblock to erase all filesystem
         self.info = DiskInfo::default();
-        self.pointer = 0;
         Ok(())
     }
 }
 
 impl FileDiskDriver {
-    pub fn new() -> Self {
+    pub fn new(path: &str) -> Self {
         Self {
             info: DiskInfo {
                 stats: Default::default(),
@@ -87,13 +104,8 @@ impl FileDiskDriver {
                     ..Default::default()
                 },
             },
-            mem: vec![0 as u8; FILE_DISK_SIZE],
-            pointer: 0,
+            file: if path.is_empty() { None } else { Some(File::open(path).unwrap()) },
         }
-    }
-
-    fn get_pointer_slice(self: &mut Self, size: usize) -> &mut [u8] {
-        &mut self.mem[self.pointer..(size + self.pointer)]
     }
 }
 
@@ -104,7 +116,9 @@ mod tests {
 
     #[test]
     fn simple_test() -> Result<()> {
-        let mut driver = FileDiskDriver::new();
-        driver_tester(&mut driver)
+        let mut driver = FileDiskDriver::new("");
+        driver_tester(&mut driver)?;
+        println!("Test done.");
+        Ok(())
     }
 }
