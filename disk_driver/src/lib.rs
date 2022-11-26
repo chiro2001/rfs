@@ -26,7 +26,7 @@ pub struct DiskInfo {
 }
 
 impl DiskConst {
-    pub fn disk_blocks(self: &Self) -> usize {
+    pub fn disk_block_count(self: &Self) -> usize {
         (self.layout_size / self.iounit_size).try_into().unwrap()
     }
 }

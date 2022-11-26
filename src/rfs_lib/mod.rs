@@ -34,8 +34,16 @@ impl RFS {
         Self { driver, driver_info: Default::default() }
     }
 
+    fn disk_block_size(self: &mut Self) -> usize { self.driver_info.consts.iounit_size as usize }
+
     fn read_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
-        assert_eq!(buf.len(), self.driver_info.consts.iounit_size as usize);
+        assert_eq!(buf.len(), self.disk_block_size());
+        Ok(())
+    }
+
+    fn read_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
+        let sz = self.disk_block_size();
+        for i in 0..count { self.read_block(&mut buf[(i * sz)..((i + 1) * sz)])? }
         Ok(())
     }
 }
@@ -61,17 +69,23 @@ impl Filesystem for RFS {
         result_to_int(self.driver.ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf))?;
         self.driver_info.consts.iounit_size = u32::from_be_bytes(buf.clone());
         // at lease 32 blocks
-        println!("Disk {} has {} blocks.", file, self.driver_info.consts.disk_blocks());
-        if self.driver_info.consts.disk_blocks() < 32 {
+        println!("Disk {} has {} IO blocks.", file, self.driver_info.consts.disk_block_count());
+        if self.driver_info.consts.layout_size < 32 * 0x400 {
             println!("Too small disk!");
             return Err(1);
         }
         println!("disk info: {:?}", self.driver_info);
         // read super block
-        let mut data_block0 = [0 as u8].repeat(self.driver_info.consts.iounit_size as usize);
-        result_to_int(self.read_block(&mut data_block0))?;
-        let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_block0) };
+        let super_blk_count = size_of::<Ext2SuperBlock>() / self.disk_block_size();
+        let mut data_blocks_head = [0 as u8].repeat((self.disk_block_size() * super_blk_count) as usize);
+        result_to_int(self.read_blocks(&mut data_blocks_head, super_blk_count))?;
+        let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_blocks_head) };
         println!("read magic: {}", super_block.s_magic);
+        if !super_block.magic_matched() {
+            println!("fs not found! creating super block...");
+            super_block = Ext2SuperBlock::default();
+        }
+        println!("Init done.");
         Ok(())
     }
 

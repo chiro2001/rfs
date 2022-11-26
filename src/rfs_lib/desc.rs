@@ -179,7 +179,7 @@ pub const EXT2_RESERVED_FL: usize = 0x80000000         /* reserved for ext2 lib 
 pub const EXT2_FL_USER_VISIBLE: usize = 0x604BDFFF    /* User visible flags */;
 pub const EXT2_FL_USER_MODIFIABLE: usize = 0x604B80FF /* User modifiable flags */;
 
-pub struct Ext2INode { 
+pub struct Ext2INode {
     /*00*/ pub i_mode: u16,  /* File mode */
     pub i_uid: u16,          /* Low 16 bits of Owner Uid */
     pub i_size: u32,         /* Size in bytes */
@@ -456,8 +456,8 @@ impl Default for Ext2SuperBlock {
             s_wtime: 0,
             s_mnt_count: 0,
             s_max_mnt_count: 0,
-            // s_magic: EXT2_SUPER_MAGIC,
-            s_magic: 0,
+            s_magic: EXT2_SUPER_MAGIC,
+            // s_magic: 0,
             s_state: 0,
             s_errors: 0,
             s_minor_rev_level: 0,
@@ -546,6 +546,10 @@ impl Default for Ext2SuperBlock {
             s_checksum: 0
         }
     }
+}
+
+impl Ext2SuperBlock {
+    pub fn magic_matched(self: &Self) -> bool { self.s_magic == EXT2_SUPER_MAGIC }
 }
 
 /*
