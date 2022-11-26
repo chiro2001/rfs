@@ -4,16 +4,20 @@ use std::process::Stdio;
 use clap::{arg, ArgAction, command};
 use crate::hello::HelloFS;
 use anyhow::{anyhow, Result};
+use disk_driver::file::FileDiskDriver;
 use execute::Execute;
 use fork::{Fork, fork};
 use lazy_static::lazy_static;
+use libc::sysinfo;
 use nix::sys::signal;
 use mut_static::MutStatic;
 use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
+use rfs::RFS;
 
 mod lib;
 mod hello;
+// mod utils;
 
 lazy_static! {
     pub static ref MOUNT_POINT: MutStatic<String> = MutStatic::new();
@@ -45,17 +49,20 @@ fn main() -> Result<()> {
 
     macro_rules! umount {
         () => {
-            println!("Unmounting {}", MOUNT_POINT.read().unwrap().clone());
-            let mut command = execute::command_args!("fusermount", "-u", MOUNT_POINT.read().unwrap().clone());
-            command.stdout(Stdio::piped());
-            let output = command.execute_output().unwrap();
-            println!("{}", String::from_utf8(output.stdout).unwrap());
+            {
+                println!("Unmounting {}", MOUNT_POINT.read().unwrap().clone());
+                let mut command = execute::command_args!("fusermount", "-u", MOUNT_POINT.read().unwrap().clone());
+                command.stdout(Stdio::piped());
+                let output = command.execute_output().unwrap();
+                println!("{}", String::from_utf8(output.stdout).unwrap());
+            }
         };
     }
 
     pub extern "C" fn signal_handler(_: i32) {
+        unsafe { println!("[{}] Received signal and will umount.", libc::getpid()); }
         umount!();
-        println!("All Done.");
+        unsafe { println!("[{}] All Done.", libc::getpid()); }
         std::process::exit(0);
     }
 
@@ -85,9 +92,8 @@ fn main() -> Result<()> {
         }
         Ok(Fork::Child) => {
             match retry_with_index(Fixed::from_millis(100), |current_try| {
-                println!("Mounting to {}", abspath_mountpoint);
-                // fuse::mount(lib::RFS, &mountpoint, &options).unwrap();
-                let res = fuse::mount(HelloFS, abspath_mountpoint, &options);
+                println!("[try {}/{}] Mount to {}", current_try, retry_times, abspath_mountpoint);
+                let res = fuse::mount(RFS::new(Box::new(FileDiskDriver::new(""))), abspath_mountpoint, &options);
                 match res {
                     Ok(_) => {
                         println!("All Done.");
