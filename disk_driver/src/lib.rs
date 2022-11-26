@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::mem::size_of;
 
 #[derive(Default, Debug)]
 pub struct DiskStats {
@@ -14,7 +15,7 @@ pub struct DiskConst {
     pub seek_lat: u32,
     pub track_num: i32,
     pub major_num: i32,
-    pub layout_size: u64,
+    pub layout_size: u32,
     pub iounit_size: u32,
 }
 
@@ -65,4 +66,29 @@ pub trait DiskDriver {
     fn ddriver_reset(self: &mut Self) -> Result<()>;
 }
 
+pub const IOC_REQ_DEVICE_SIZE: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('A' as u32) << (0 + 8)) | ((0) << 0) | ((size_of::<u32>() as u32) << ((0 + 8) + 8));
+pub const IOC_REQ_DEVICE_STATE: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('A' as u32) << (0 + 8)) | ((1) << 0) | ((size_of::<u32>() as u32 * 3) << ((0 + 8) + 8));
+pub const IOC_REQ_DEVICE_RESET: u32 = ((0 as u32) << (((0 + 8) + 8) + 14)) | (('A' as u32) << (0 + 8)) | ((2) << 0) | ((0) << ((0 + 8) + 8));
+pub const IOC_REQ_DEVICE_IO_SZ: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('A' as u32) << (0 + 8)) | ((3) << 0) | ((size_of::<u32>() as u32) << ((0 + 8) + 8));
+
 pub mod memory;
+pub mod file;
+
+fn driver_tester(driver: &mut dyn DiskDriver) -> Result<()> {
+    driver.ddriver_open("test")?;
+    let mut buf = [0; size_of::<u32>()];
+    driver.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf)?;
+    let disk_size = u32::from_be_bytes(buf.clone()) as usize;
+    driver.ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf)?;
+    let disk_unit = u32::from_be_bytes(buf) as usize;
+    println!("disk size: {}, disk unit: {}", disk_size, disk_unit);
+    let write_data = [0x55 as u8].repeat(disk_unit);
+    driver.ddriver_write(&write_data, disk_unit)?;
+    driver.ddriver_seek(0, SeekType::Set)?;
+    let mut read_data = [0 as u8].repeat(disk_unit);
+    driver.ddriver_read(&mut read_data, disk_unit)?;
+    // println!("write {:?}, read {:?}", write_data, read_data);
+    assert_eq!(read_data, write_data);
+    driver.ddriver_close()?;
+    Ok(())
+}

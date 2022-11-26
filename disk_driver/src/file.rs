@@ -1,20 +1,19 @@
 use crate::{DiskConst, DiskDriver, DiskInfo, SeekType};
 use anyhow::Result;
 use crate::*;
-use std::mem::size_of;
 
-const MEM_DISK_SIZE: usize = 4 * 0x400 * 0x400;
-const MEM_DISK_UNIT: usize = 512;
+const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400;
+const FILE_DISK_UNIT: usize = 512;
 
-pub struct MemoryDiskDriver {
+pub struct FileDiskDriver {
     pub info: DiskInfo,
     pub mem: Vec<u8>,
     pointer: usize,
 }
 
-impl DiskDriver for MemoryDiskDriver {
+impl DiskDriver for FileDiskDriver {
     fn ddriver_open(self: &mut Self, path: &str) -> Result<()> {
-        println!("MemDrv open: {}", path);
+        println!("FileDrv open: {}", path);
         Ok(())
     }
 
@@ -69,7 +68,7 @@ impl DiskDriver for MemoryDiskDriver {
     }
 
     fn ddriver_reset(self: &mut Self) -> Result<()> {
-        self.mem.copy_from_slice(&[0; MEM_DISK_SIZE]);
+        self.mem.copy_from_slice(&[0; FILE_DISK_SIZE]);
         // TODO: write superblock to erase all filesystem
         self.info = DiskInfo::default();
         self.pointer = 0;
@@ -77,18 +76,18 @@ impl DiskDriver for MemoryDiskDriver {
     }
 }
 
-impl MemoryDiskDriver {
+impl FileDiskDriver {
     pub fn new() -> Self {
         Self {
             info: DiskInfo {
                 stats: Default::default(),
                 consts: DiskConst {
-                    layout_size: MEM_DISK_SIZE as u32,
-                    iounit_size: MEM_DISK_UNIT as u32,
+                    layout_size: FILE_DISK_SIZE as u32,
+                    iounit_size: FILE_DISK_UNIT as u32,
                     ..Default::default()
                 },
             },
-            mem: vec![0 as u8; MEM_DISK_SIZE],
+            mem: vec![0 as u8; FILE_DISK_SIZE],
             pointer: 0,
         }
     }
@@ -105,7 +104,7 @@ mod tests {
 
     #[test]
     fn simple_test() -> Result<()> {
-        let mut driver = MemoryDiskDriver::new();
+        let mut driver = FileDiskDriver::new();
         driver_tester(&mut driver)
     }
 }
