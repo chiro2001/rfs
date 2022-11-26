@@ -39,6 +39,28 @@ pub const EXT2_SUPER_MAGIC: usize = 0xEF53;
 pub const EXT2_LINK_MAX: usize = 65000;
 
 /*
+ * ACL structures
+ */
+struct Ext2AclHeader /* Header of Access Control Lists */
+{
+    pub aclh_size: u32,
+    pub aclh_file_count: u32,
+    pub aclh_acle_count: u32,
+    pub aclh_first_acle: u32,
+}
+
+struct Ext2AclEntry /* Access Control List Entry */
+{
+    pub acle_size: u32,
+    pub acle_perms: u16, /* Access permissions */
+    pub acle_type: u16,  /* Type of entry */
+    pub acle_tag: u16,   /* User or group identity */
+    pub acle_pad1: u16,
+    pub acle_next: u32, /* Pointer on next entry for the */
+    /* same inode or on next free entry */
+}
+
+/*
  * Structure of a blocks group descriptor
  */
 pub struct Ext2GroupDesc {
