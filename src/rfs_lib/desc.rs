@@ -32,7 +32,7 @@ pub const EXT2_GOOD_OLD_FIRST_INO: usize = 11;
 /*
  * The second extended file system magic number
  */
-pub const EXT2_SUPER_MAGIC: usize = 0xEF53;
+pub const EXT2_SUPER_MAGIC: u16 = 0xEF53;
 /*
  * Maximal count of links to a file
  */
@@ -205,6 +205,36 @@ pub struct Ext2INode {
     pub i_reserved: u16,
 }
 
+impl Default for Ext2INode {
+    fn default() -> Self {
+        Self {
+            i_mode: 0,
+            i_uid: 0,
+            i_size: 0,
+            i_atime: 0,
+            i_ctime: 0,
+            i_mtime: 0,
+            i_dtime: 0,
+            i_gid: 0,
+            i_links_count: 0,
+            i_blocks: 0,
+            i_flags: 0,
+            i_version: 0,
+            i_block: [0; 15],
+            i_generation: 0,
+            i_file_acl: 0,
+            i_size_high: 0,
+            i_faddr: 0,
+            i_blocks_hi: 0,
+            i_file_acl_high: 0,
+            i_uid_high: 0,
+            i_gid_high: 0,
+            i_checksum_lo: 0,
+            i_reserved: 0
+        }
+    }
+}
+
 /*
  * File system states
  */
@@ -345,6 +375,9 @@ struct Ext2SuperBlock {
     /*0fc*/ pub s_def_hash_version: u8,    /* Default hash version to use */
     pub s_jnl_backup_type: u8,             /* Default type of journal backup */
     pub s_desc_size: u16,                  /* Group desc. size: INCOMPAT_64BIT */
+    /**
+     * Other options
+     */
     /*100*/ pub s_default_mount_opts: u32, /* default EXT2_MOUNT_* flags used */
     pub s_first_meta_bg: u32,              /* First metablock group */
     pub s_mkfs_time: u32,                  /* When the filesystem was created */
@@ -373,8 +406,7 @@ struct Ext2SuperBlock {
     pub s_first_error_time: u32,                /* first time an error happened */
     pub s_first_error_ino: u32,                 /* inode involved in first error */
     /*1a0*/ pub s_first_error_block: u64,       /* block involved in first error */
-    pub s_first_error_func: [u8; 32], /* function where error hit, no NUL?
-                                            */
+    pub s_first_error_func: [u8; 32], /* function where error hit, no NUL?*/
     /*1c8*/ pub s_first_error_line: u32, /* line number where error happened */
     pub s_last_error_time: u32,          /* most recent time of an error */
     /*1d0*/ pub s_last_error_ino: u32,   /* inode involved in last error */
@@ -404,6 +436,115 @@ struct Ext2SuperBlock {
     pub s_encoding_flags: le16,   /* Filename charset encoding flags */
     pub s_reserved: [le32; 95],     /* Padding to the end of the block */
     /*3fc*/ pub s_checksum: u32,  /* crc32c(superblock) */
+}
+
+impl Default for Ext2SuperBlock {
+    fn default() -> Self {
+        Self {
+            s_inodes_count: 0,
+            s_blocks_count: 0,
+            s_r_blocks_count: 0,
+            s_free_blocks_count: 0,
+            s_free_inodes_count: 0,
+            s_first_data_block: 0,
+            s_log_block_size: 0,
+            s_log_cluster_size: 0,
+            s_blocks_per_group: 0,
+            s_clusters_per_group: 0,
+            s_inodes_per_group: 0,
+            s_mtime: 0,
+            s_wtime: 0,
+            s_mnt_count: 0,
+            s_max_mnt_count: 0,
+            s_magic: EXT2_SUPER_MAGIC,
+            s_state: 0,
+            s_errors: 0,
+            s_minor_rev_level: 0,
+            s_lastcheck: 0,
+            s_checkinterval: 0,
+            s_creator_os: 0,
+            s_rev_level: 0,
+            s_def_resuid: 0,
+            s_def_resgid: 0,
+            s_first_ino: 0,
+            s_inode_size: 0,
+            s_block_group_nr: 0,
+            s_feature_compat: 0,
+            s_feature_incompat: 0,
+            s_feature_ro_compat: 0,
+            s_uuid: [0; 16],
+            s_volume_name: [0; 16],
+            s_last_mounted: [0; 64],
+            s_algorithm_usage_bitmap: 0,
+            s_prealloc_blocks: 0,
+            s_prealloc_dir_blocks: 0,
+            s_reserved_gdt_blocks: 0,
+            s_journal_uuid: [0; 16],
+            s_journal_inum: 0,
+            s_journal_dev: 0,
+            s_last_orphan: 0,
+            s_hash_seed: [0; 4],
+            s_def_hash_version: 0,
+            s_jnl_backup_type: 0,
+            s_desc_size: 0,
+            s_default_mount_opts: 0,
+            s_first_meta_bg: 0,
+            s_mkfs_time: 0,
+            s_jnl_blocks: [0; 17],
+            s_blocks_count_hi: 0,
+            s_r_blocks_count_hi: 0,
+            s_free_blocks_hi: 0,
+            s_min_extra_isize: 0,
+            s_want_extra_isize: 0,
+            s_flags: 0,
+            s_raid_stride: 0,
+            s_mmp_update_interval: 0,
+            s_mmp_block: 0,
+            s_raid_stripe_width: 0,
+            s_log_groups_per_flex: 0,
+            s_checksum_type: 0,
+            s_encryption_level: 0,
+            s_reserved_pad: 0,
+            s_kbytes_written: 0,
+            s_snapshot_inum: 0,
+            s_snapshot_id: 0,
+            s_snapshot_r_blocks_count: 0,
+            s_snapshot_list: 0,
+            s_error_count: 0,
+            s_first_error_time: 0,
+            s_first_error_ino: 0,
+            s_first_error_block: 0,
+            s_first_error_func: [0; 32],
+            s_first_error_line: 0,
+            s_last_error_time: 0,
+            s_last_error_ino: 0,
+            s_last_error_line: 0,
+            s_last_error_block: 0,
+            s_last_error_func: [0; 32],
+            s_mount_opts: [0; 64],
+            s_usr_quota_inum: 0,
+            s_grp_quota_inum: 0,
+            s_overhead_clusters: 0,
+            s_backup_bgs: [0; 2],
+            s_encrypt_algos: [0; 4],
+            s_encrypt_pw_salt: [0; 16],
+            s_lpf_ino: 0,
+            s_prj_quota_inum: 0,
+            s_checksum_seed: 0,
+            s_wtime_hi: 0,
+            s_mtime_hi: 0,
+            s_mkfs_time_hi: 0,
+            s_lastcheck_hi: 0,
+            s_first_error_time_hi: 0,
+            s_last_error_time_hi: 0,
+            s_first_error_errcode: 0,
+            s_last_error_errcode: 0,
+            s_encoding: 0,
+            s_encoding_flags: 0,
+            s_reserved: [0; 95],
+            s_checksum: 0
+        }
+    }
 }
 
 /*
