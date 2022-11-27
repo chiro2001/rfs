@@ -133,9 +133,20 @@ pub unsafe fn deserialize_row<T>(src: &[u8]) -> T {
     std::ptr::read(src.as_ptr() as *const _)
 }
 
+#[macro_export]
+macro_rules! get_offset {
+    ($type:ty, $field:tt) => ({
+        let dummy = ::core::mem::MaybeUninit::<$type>::uninit();
+        let dummy_ptr = dummy.as_ptr();
+        let member_ptr = unsafe { ::core::ptr::addr_of!((*dummy_ptr).$field) };
+        member_ptr as usize - dummy_ptr as usize
+    })
+}
+
 #[cfg(test)]
 mod test {
     use anyhow::Result;
+    use crate::desc::Ext2SuperBlock;
     use crate::utils::deserialize_row;
 
     #[derive(Debug)]
@@ -148,6 +159,16 @@ mod test {
     fn test_deserialize_row() -> Result<()> {
         let s: TestStruct = unsafe { deserialize_row(&vec![1, 2, 3, 4, 5]) };
         println!("{:x?}", s);
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_offset() -> Result<()> {
+        let la = get_offset!(TestStruct, a);
+        let lb = get_offset!(TestStruct, b);
+        println!("la = {}, lb = {}", la, lb);
+        let l_s_inodes_count = get_offset!(Ext2SuperBlock, s_inodes_count);
+        println!("l_s_inodes_count = {}", l_s_inodes_count);
         Ok(())
     }
 }

@@ -66,6 +66,7 @@ struct Ext2AclEntry /* Access Control List Entry */
  * Structure of a blocks group descriptor
  */
 #[derive(Default)]
+#[repr(C, align(8))]
 pub struct Ext2GroupDesc {
     pub bg_block_bitmap: u32,      /* Blocks bitmap block */
     pub bg_inode_bitmap: u32,      /* Inodes bitmap block */
@@ -182,6 +183,7 @@ pub const EXT2_RESERVED_FL: usize = 0x80000000         /* reserved for ext2 lib 
 pub const EXT2_FL_USER_VISIBLE: usize = 0x604BDFFF    /* User visible flags */;
 pub const EXT2_FL_USER_MODIFIABLE: usize = 0x604B80FF /* User modifiable flags */;
 
+#[repr(C, align(8))]
 pub struct Ext2INode {
     /*00*/ pub i_mode: u16,  /* File mode */
     pub i_uid: u16,          /* Low 16 bits of Owner Uid */
@@ -311,6 +313,8 @@ pub const EXT2_LABEL_LEN: usize = 16;
 /*
  * Structure of the super block
  */
+#[derive(Debug)]
+#[repr(C, align(8))]
 pub struct Ext2SuperBlock {
     /*000*/ pub s_inodes_count: u32,      /* Inodes count */
     pub s_blocks_count: u32,              /* Blocks count */
@@ -326,7 +330,8 @@ pub struct Ext2SuperBlock {
     pub s_mtime: u32,                     /* Mount time */
     /*030*/ pub s_wtime: u32,             /* Write time */
     pub s_mnt_count: u16,                 /* Mount count */
-    pub s_max_mnt_count: s16,             /* Maximal mount count */
+    // pub s_max_mnt_count: s16,             /* Maximal mount count */
+    pub s_max_mnt_count: u16,             /* Maximal mount count */
     pub s_magic: u16,                     /* Magic signature */
     pub s_state: u16,                     /* File system state */
     pub s_errors: u16,                    /* Behaviour when detecting errors */

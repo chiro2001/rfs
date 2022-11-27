@@ -14,6 +14,7 @@ use desc::Ext2SuperBlock;
 use utils::deserialize_row;
 use desc::Ext2GroupDesc;
 use mem::Ext2SuperBlockMem;
+use crate::get_offset;
 
 #[cxx::bridge]
 mod ffi {
@@ -103,6 +104,9 @@ impl Filesystem for RFS {
         println!("{:?}", data_blocks_head);
         println!("magic read here: {:02x} {:02x}", data_blocks_head[56], data_blocks_head[57]);
         println!("read magic: {}", super_block.s_magic);
+        println!("read super block: {:?}", super_block);
+        println!("head offset: {}", get_offset!(Ext2SuperBlock, s_inodes_count));
+        println!("magic offset: {}", get_offset!(Ext2SuperBlock, s_magic));
         if !super_block.magic_matched() {
             println!("FileSystem not found! creating super block...");
             // let mut group_desc = Ext2GroupDesc::default();
