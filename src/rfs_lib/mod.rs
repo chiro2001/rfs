@@ -287,7 +287,32 @@ impl Filesystem for RFS {
         prv!(block_id);
 
         let data_block = ret(self.get_data_block(block_id))?;
-        prv!(data_block);
+        prv!(&data_block[..64]);
+
+        prv!(EXT2_DIR_ENTRY_BASE_SIZE);
+        prv!(size_of::<char>());
+        // let dirs: Vec<Ext2DirEntry> = (0..(self.block_size() / EXT2_DIR_ENTRY_BASE_SIZE)).map(|i| {
+        //     unsafe { deserialize_row(&data_block[i * EXT2_DIR_ENTRY_BASE_SIZE..]) }
+        // }).collect();
+        let mut p = 0;
+        let mut dirs = vec![];
+        while p <= data_block.len() {
+            let dir: Ext2DirEntry = unsafe { deserialize_row(&data_block[p..]) };
+            if dir.name_len == 0 { break; }
+            println!("[p {:x}] name_len = {}", p, dir.name_len);
+            // align p to word
+            p += EXT2_DIR_ENTRY_BASE_SIZE + dir.name_len as usize;
+            let inc = p & 0x3;
+            p &= !0x3;
+            if inc != 0 { p += 0x4; }
+            println!("next p: {:x}", p);
+            // println!("dir {:?}", dir);
+            dirs.push(dir);
+        }
+
+        for d in dirs {
+            println!("dir {}", d.to_string());
+        }
 
         println!("Init done.");
         Ok(())

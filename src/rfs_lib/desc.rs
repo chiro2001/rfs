@@ -659,11 +659,25 @@ pub const EXT2_FEATURE_RO_COMPAT_SUPP: usize =
  */
 pub const EXT2_NAME_LEN: usize = 255;
 
-struct Ext2DirEntry {
+#[derive(Debug)]
+pub struct Ext2DirEntry {
     pub inode: u32,              /* Inode number */
     pub rec_len: u16,            /* Directory entry length */
-    pub name_len: u16,           /* Name length */
-    pub name: [char; EXT2_NAME_LEN], /* File name */
+    // pub name_len: u16,           /* Name length */
+    // temporally use deprecated structure, for having no logic from cpp
+    pub name_len: u8,               /* Name length */
+    pub file_type: u8,
+    pub name: [u8; EXT2_NAME_LEN], /* File name */
+}
+
+pub const EXT2_DIR_ENTRY_BASE_SIZE: usize = size_of::<Ext2DirEntry>() - EXT2_NAME_LEN;
+
+impl Ext2DirEntry {
+    pub fn to_string(self: &Self) -> String {
+        format!("DIR {} {} size {} name size {}", self.inode,
+                String::from_utf8_lossy(&self.name[..self.name_len as usize]),
+                self.rec_len, self.name_len)
+    }
 }
 
 /*
@@ -685,7 +699,7 @@ struct Ext2DirEntry2 {
     pub rec_len: u16, /* Directory entry length */
     pub name_len: u8, /* Name length */
     pub file_type: u8,
-    pub name: [char; EXT2_NAME_LEN], /* File name */
+    pub name: [u8; EXT2_NAME_LEN], /* File name */
 }
 
 /*
