@@ -5,6 +5,8 @@ extern crate core;
 
 use core::mem::{align_of, forget, size_of};
 use core::slice::{from_raw_parts, from_raw_parts_mut};
+use std::os::raw::c_int;
+use fuse::{ReplyAttr, ReplyData, ReplyDirectory};
 
 pub trait VecExt {
     /// Casts a `Vec<T>` into a `Vec<U>`.
@@ -170,6 +172,46 @@ macro_rules! prvi {
             $(prvi!($e);)*
         }
     }
+}
+
+#[macro_export]
+macro_rules! rep {
+    ($reply:expr, $n:ident, $r:expr) => {
+        let $n;
+        let _result = $r;
+        if _result.is_err() {
+            $reply.error(ENOENT);
+            return;
+        } else {
+            $n = _result.unwrap();
+        }
+    };
+}
+
+pub fn ret<E, T>(res: Result<T, E>) -> Result<T, c_int> where E: std::fmt::Debug {
+    match res {
+        Ok(ok) => Ok(ok),
+        Err(e) => {
+            println!("RFS Error: {:#?}", e);
+            Err(1)
+        }
+    }
+}
+
+pub trait ReplyError {
+    fn make_error(self: Self, err: c_int);
+}
+
+impl ReplyError for ReplyAttr {
+    fn make_error(self: Self, err: c_int) { self.error(err) }
+}
+
+impl ReplyError for ReplyData {
+    fn make_error(self: Self, err: c_int) { self.error(err) }
+}
+
+impl ReplyError for ReplyDirectory {
+    fn make_error(self: Self, err: c_int) { self.error(err) }
 }
 
 #[cfg(test)]
