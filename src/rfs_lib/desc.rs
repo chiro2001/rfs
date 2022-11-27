@@ -673,10 +673,12 @@ pub struct Ext2DirEntry {
 pub const EXT2_DIR_ENTRY_BASE_SIZE: usize = size_of::<Ext2DirEntry>() - EXT2_NAME_LEN;
 
 impl Ext2DirEntry {
+    pub fn get_name(self: &Self) -> String {
+        String::from_utf8_lossy(&self.name[..self.name_len as usize]).to_string()
+    }
     pub fn to_string(self: &Self) -> String {
         format!("DIR {} {} size {} name size {}", self.inode,
-                String::from_utf8_lossy(&self.name[..self.name_len as usize]),
-                self.rec_len, self.name_len)
+                self.get_name(), self.rec_len, self.name_len)
     }
 }
 

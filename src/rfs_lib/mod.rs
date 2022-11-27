@@ -341,9 +341,16 @@ impl Filesystem for RFS {
         }
 
         let dirs = ret(self.get_dirs(EXT2_ROOT_INO))?;
-        for d in dirs {
+        for d in &dirs {
             println!("ROOT/{}", d.to_string());
         }
+        let dir = &dirs[2];
+        prv!(dir);
+        let dirs2 = ret(self.get_dirs(dir.inode as usize))?;
+        for d in &dirs2 {
+            println!("{}/{}", dir.get_name(), d.to_string());
+        }
+
 
         println!("Init done.");
         Ok(())
