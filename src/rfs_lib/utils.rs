@@ -152,7 +152,8 @@ macro_rules! prv {
     };
     ($($e:expr),*) => {
         {
-            $(prv!($e);)*
+            $(print!("{} = {:?}, ", stringify!($e), $e);)*
+            println!("");
         }
     }
 }

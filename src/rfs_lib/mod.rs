@@ -159,6 +159,10 @@ impl RFS {
         // TODO: walk all blocks, including indirect blocks
         self.get_block_dirs(inode.i_block[0] as usize)
     }
+
+    pub fn shift_ino(ino: u64) -> usize {
+        if ino == 1 { 2 } else { ino as usize }
+    }
 }
 
 fn ret<E, T>(res: Result<T, E>) -> Result<T, c_int> where E: std::fmt::Debug {
@@ -384,24 +388,45 @@ impl Filesystem for RFS {
     }
 
     fn lookup(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        prv!(parent, name);
+        prv!("lookup", parent, name);
+        let parent = RFS::shift_ino(parent);
+        rep!(reply, dirs, self.get_dirs(parent));
+        for d in dirs {
+            if d.get_name() == name.to_str().unwrap() {
+                match self.get_inode(d.inode as usize) {
+                    Ok(r) => {
+                        let attr = r.to_attr(d.inode as usize);
+                        reply.entry(&TTL, &attr, 0);
+                        return;
+                    }
+                    Err(_) => {
+                        reply.error(ENOENT);
+                        return;
+                    }
+                };
+            }
+        }
         reply.error(ENOENT);
     }
 
     fn getattr(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyAttr) {
-        let ino = ino as usize;
+        prv!("getattr", ino);
+        let ino = RFS::shift_ino(ino);
         rep!(reply, node, self.get_inode(ino));
         let attr = node.to_attr(ino);
+        prv!(attr);
         reply.attr(&TTL, &attr);
     }
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
-        let ino = ino as usize;
+        prv!("read", ino, offset, size);
+        let ino = RFS::shift_ino(ino);
         rep!(reply, node, self.get_inode(ino));
     }
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
-        let ino = ino as usize;
+        prv!("readdir", ino, offset);
+        let ino = RFS::shift_ino(ino);
         rep!(reply, dirs, self.get_dirs(ino));
         for (i, d) in dirs.iter().enumerate() {
             rep!(reply, inode, self.get_inode(d.inode as usize));
