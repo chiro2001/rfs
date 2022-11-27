@@ -32,6 +32,8 @@ fn main() -> Result<()> {
             .default_value("tests/mnt"))
         .arg(arg!(-f --front "Keep daemon running in front").action(ArgAction::SetTrue)
             .required(false))
+        .arg(arg!(-r --read_only "Mount as read only filesystem").action(ArgAction::SetTrue)
+            .required(false))
         .arg(
             arg!(-d --device <FILE> "Device path (filesystem storage file)")
                 .required(false)
@@ -82,8 +84,9 @@ fn main() -> Result<()> {
         }
     }
 
-    let options = ["-o", "ro", "-o", "fsname=rfs"]
-        .iter()
+    let read_only = matches.get_flag("read_only");
+    let options = ["-o", if read_only { "ro" } else { "rw" }, "-o", "fsname=rfs"];
+    let options = options.iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
     let retry_times = 3;

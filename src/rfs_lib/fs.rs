@@ -80,7 +80,7 @@ impl Filesystem for RFS {
             let mut command = execute::command_args!("mkfs.ext2", file, "-t", "ext2", "-r", "0");
             command.stdout(Stdio::piped());
             let output = command.execute_output().unwrap();
-            debug!("{}", String::from_utf8(output.stdout).unwrap());
+            info!("{}", String::from_utf8(output.stdout).unwrap());
             // reload disk driver
             ret(self.driver.ddriver_close())?;
             ret(self.driver.ddriver_open(file))?;
