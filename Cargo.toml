@@ -22,6 +22,7 @@ disk_driver = { path = "disk_driver" }
 macro_tools = { path = "src/macro_tools" }
 rand = "0.8.5"
 chrono = "0.4.23"
+log = "0.4.17"
 
 [lib]
 crate-type = ["staticlib", "rlib"]

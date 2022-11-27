@@ -3,6 +3,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use crate::{DiskConst, DiskDriver, DiskInfo, SeekType};
 use anyhow::Result;
+use log::*;
 use crate::*;
 
 const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400;
@@ -24,9 +25,9 @@ impl FileDiskDriver {
 
 impl DiskDriver for FileDiskDriver {
     fn ddriver_open(self: &mut Self, path: &str) -> Result<()> {
-        println!("FileDrv open: {}", path);
+        info!("FileDrv open: {}", path);
         if !Path::new(path).exists() {
-            println!("Create a new file {}", path);
+            info!("Create a new file {}", path);
             File::create(path)?.write_all(&self.blank_data())?;
         }
         self.file = Some(OpenOptions::new().read(true).write(true).open(path)?);
@@ -118,7 +119,7 @@ mod tests {
     fn simple_test() -> Result<()> {
         let mut driver = FileDiskDriver::new("");
         driver_tester(&mut driver)?;
-        println!("Test done.");
+        info!("Test done.");
         Ok(())
     }
 }

@@ -149,27 +149,15 @@ macro_rules! get_offset {
 macro_rules! prv {
     ($e:expr) => {
         {
-            println!("{} = {:?}", stringify!($e), $e);
+            use log::*;
+            debug!("{} = {:?}", stringify!($e), $e);
         }
     };
     ($($e:expr),*) => {
         {
-            $(print!("{} = {:?}, ", stringify!($e), $e);)*
-            println!("");
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! prvi {
-    ($e:expr) => {
-        {
-            println!("{} = {}", stringify!($e), $e);
-        }
-    };
-    ($($e:expr),*) => {
-        {
-            $(prvi!($e);)*
+            use log::*;
+            $(debug!("{} = {:?}, ", stringify!($e), $e);)*
+            debug!("");
         }
     }
 }
@@ -217,8 +205,8 @@ impl ReplyError for ReplyDirectory {
 #[cfg(test)]
 mod test {
     use anyhow::Result;
-    use crate::desc::Ext2SuperBlock;
-    use crate::utils::deserialize_row;
+    use crate::rfs_lib::desc::Ext2SuperBlock;
+    use crate::rfs_lib::utils::deserialize_row;
 
     #[derive(Debug)]
     #[repr(C, align(8))]

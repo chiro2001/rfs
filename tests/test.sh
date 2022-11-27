@@ -12,7 +12,7 @@
 #cd - || exit
 
 # read -r -p "请输入测试方式[N(基础功能测试) / E(进阶功能测试) / S(分阶段测试)]: " TEST_METHOD
-TEST_METHOD="E"
+TEST_METHOD="M"
 
 rm mnt -rf
 mkdir mnt 2>/dev/null 
@@ -21,6 +21,8 @@ if [[ "${TEST_METHOD}" == "E" ]]; then
     ./main.sh "6"
 elif [[ "${TEST_METHOD}" == "N" ]]; then
     ./main.sh "4"
+elif [[ "${TEST_METHOD}" == "M" ]]; then
+    ./main.sh "1"
 else
     echo "----测试阶段1：mount测试"
     echo "----测试阶段2：增加 mkdir 和 touch 测试"

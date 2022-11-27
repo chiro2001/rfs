@@ -171,6 +171,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cxx",
+ "log",
 ]
 
 [[package]]
@@ -546,6 +547,7 @@ dependencies = [
  "fuse",
  "lazy_static",
  "libc",
+ "log",
  "macro_tools",
  "mut_static",
  "nix",

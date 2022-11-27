@@ -1,3 +1,4 @@
+use std::env::set_var;
 use std::ffi::OsStr;
 use std::fs;
 use std::process::Stdio;
@@ -23,6 +24,9 @@ lazy_static! {
 }
 
 fn main() -> Result<()> {
+    let logging_level = std::env::var("RUST_LOG");
+    if logging_level.is_err() { set_var("RUST_LOG", "info"); }
+    env_logger::init();
     let matches = command!() // requires `cargo` feature
         .arg(arg!([mountpoint] "Optional mountpoint to mount on")
             .default_value("tests/mnt"))
@@ -35,7 +39,6 @@ fn main() -> Result<()> {
         )
         .get_matches();
 
-    env_logger::init();
     let mountpoint = matches.get_one::<String>("mountpoint").unwrap();
     let device = matches.get_one::<String>("device").unwrap();
     let path_mountpoint = fs::canonicalize(mountpoint)?;

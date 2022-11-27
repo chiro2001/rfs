@@ -2,6 +2,7 @@ use std::time::Duration;
 pub use disk_driver;
 use anyhow::{Result};
 use disk_driver::{DiskDriver, DiskInfo, SeekType};
+use log::*;
 
 pub mod utils;
 pub mod desc;
@@ -69,7 +70,7 @@ impl RFS {
 
     fn seek_disk_block(self: &mut Self, index: usize) -> Result<()> {
         let sz = self.disk_block_size();
-        // println!("DISK seek to {:x}", index * sz);
+        // info!("DISK seek to {:x}", index * sz);
         let _n = self.driver.ddriver_seek((index * sz) as i64, SeekType::Set)?;
         Ok(())
     }
@@ -84,6 +85,7 @@ impl RFS {
         self.read_disk_blocks(buf, self.block_disk_ratio())
     }
 
+    #[allow(dead_code)]
     pub fn read_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
         self.read_disk_blocks(buf, self.block_disk_ratio() * count)
     }
@@ -101,7 +103,7 @@ impl RFS {
     }
 
     pub fn print_stats(self: &Self) {
-        println!("fs stats: {}", self.super_block.to_string());
+        info!("fs stats: {}", self.super_block.to_string());
     }
 
     pub fn get_inode(self: &mut Self, ino: usize) -> Result<Ext2INode> {
@@ -141,12 +143,12 @@ impl RFS {
             if dir.inode == 0 || dir.inode >= self.super_block.s_inodes_count || dir.rec_len == 0 {
                 break;
             }
-            // println!("[p {:x}] name_len = {}, rec_len = {}", p, dir.name_len, dir.rec_len);
+            // info!("[p {:x}] name_len = {}, rec_len = {}", p, dir.name_len, dir.rec_len);
             p += dir.rec_len as usize;
-            // println!("next p: {:x}; dir: {}", p, dir.to_string());
+            // info!("next p: {:x}; dir: {}", p, dir.to_string());
             dirs.push(dir);
         }
-        // println!("last dir entry: {:?}", dirs.last().unwrap());
+        // info!("last dir entry: {:?}", dirs.last().unwrap());
         Ok(dirs)
     }
 
