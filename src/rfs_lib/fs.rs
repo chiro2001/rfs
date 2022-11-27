@@ -236,11 +236,22 @@ impl Filesystem for RFS {
         rep!(reply, node, self.get_inode(ino));
         println!("to read block lists: {:x?}", node.i_block);
         let layer = self.block_size() / 4;
+        let layer_layer = layer * layer;
+        let layer2 = layer * 2;
         let sz = self.block_size();
         assert_eq!(offset % sz, 0);
         let max_read_blocks = 32;
         let mut data_blocks = self.create_blocks_vec(max_read_blocks);
+        let mut data_block_1 = self.create_block_vec();
+        let mut data_block_1_updated = false;
+        let mut data_block_2 = self.create_block_vec();
+        let mut data_block_2_updated = false;
+        let mut buf_u32 = [0 as u8; 4];
         let base = offset;
+        let threshold_0 = sz * 12;
+        let threshold_1 = sz * (12 + layer);
+        let threshold_2 = sz * (12 + layer + layer_layer);
+        let threshold_3 = sz * (11 + layer + layer2 + layer_layer);
         macro_rules! commit_data {
             () => {
                 reply.data(&data_blocks[..offset - base]);
@@ -249,17 +260,32 @@ impl Filesystem for RFS {
         }
         loop {
             if offset - base >= max_read_blocks * sz { commit_data!(); }
-            if offset < sz * 12 {
+            if offset < threshold_0 {
                 // block 0-11: direct addressing
                 let block = node.i_block[offset / sz] as usize;
                 if block == 0 { commit_data!(); }
                 rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
-            } else if offset < sz * (12 + layer) {
+            } else if offset < threshold_1 {
                 // layer 1
-            } else if offset < sz * (12 + layer + layer * layer) {
+                let block = node.i_block[12] as usize;
+                if block == 0 { commit_data!(); }
+                if !data_block_1_updated {
+                    rep!(reply, _r, self.read_data_block(block, &mut data_block_1));
+                    data_block_1_updated = true;
+                }
+                prv!(offset, threshold_0);
+                let o = (offset - threshold_0) / 4 / sz;
+                buf_u32.copy_from_slice(&data_block_1[o..o+4]);
+                let block2 = u32::from_be_bytes(buf_u32.clone()) as usize;
+                rep!(reply, _r, self.read_data_block(block2, &mut data_blocks[offset - base..]));
+            } else if offset < threshold_2 {
                 // layer 2
-            } else if offset < sz * (11 + layer + 2 * layer + layer * layer) {
+                let block = node.i_block[13] as usize;
+                if block == 0 { commit_data!(); }
+            } else if offset < threshold_3 {
                 // layer 3
+                let block = node.i_block[14] as usize;
+                if block == 0 { commit_data!(); }
             } else {
                 // out of index
                 reply.error(ENOENT);
