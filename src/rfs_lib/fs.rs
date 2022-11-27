@@ -272,69 +272,44 @@ impl Filesystem for RFS {
                 if block == 0 { commit_data!(); }
                 rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
             } else {
+                macro_rules! calc_layer {
+                    ($block:expr, $l:expr, $o:expr) => {
+                        {
+                            let l = $l;
+                            if !data_block_index[l] != $block {
+                                rep!(reply, _r, self.read_data_block($block, &mut data_block[l]));
+                                data_block_index[l] = $block;
+                            }
+                            let o = $o;
+                            buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
+                            let block = u32::from_be_bytes(buf_u32.clone()) as usize;
+                            block
+                        }
+                    };
+                }
                 if offset < threshold[1] {
                     // println!("layer 1, offset = {:x}, size = {:x}", offset, size);
                     // layer 1
                     let block = node.i_block[12] as usize;
                     if block == 0 { commit_data!(); }
-                    let l = 0;
-                    if !data_block_index[l] != block {
-                        rep!(reply, _r, self.read_data_block(block, &mut data_block[l]));
-                        data_block_index[l] = block;
-                    }
-                    let o = ((offset - threshold[0]) / 4 / sz) % block_id_capacity;
-                    buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
-                    let block = u32::from_be_bytes(buf_u32.clone()) as usize;
+                    let block = calc_layer!(block, 0, ((offset - threshold[0]) / 4 / sz) % block_id_capacity);
                     rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
                 } else if offset < threshold[2] {
                     // println!("layer 2");
                     // layer 2
                     let block = node.i_block[13] as usize;
                     if block == 0 { commit_data!(); }
-                    let l = 0;
-                    if !data_block_index[l] != block {
-                        rep!(reply, _r, self.read_data_block(block, &mut data_block[l]));
-                        data_block_index[l] = block;
-                    }
-                    let o = ((offset - threshold[1]) / 4 / 4 / sz) % block_id_capacity;
-                    buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
-                    let block = u32::from_be_bytes(buf_u32.clone()) as usize;
-                    let l = 1;
-                    if !data_block_index[l] != block {
-                        rep!(reply, _r, self.read_data_block(block, &mut data_block[l]));
-                        data_block_index[l] = block;
-                    }
-                    let o = ((offset - threshold[1]) / 4 / sz) % block_id_capacity;
-                    buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
+                    let block = calc_layer!(block, 0, ((offset - threshold[1]) / 4 / 4 / sz) % block_id_capacity);
+                    let block = calc_layer!(block, 1, ((offset - threshold[1]) / 4 / sz) % block_id_capacity);
                     rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
                 } else if offset < threshold[3] {
                     // println!("layer 3");
                     // layer 3
                     let block = node.i_block[13] as usize;
                     if block == 0 { commit_data!(); }
-                    let l = 0;
-                    if !data_block_index[l] != block {
-                        rep!(reply, _r, self.read_data_block(block, &mut data_block[l]));
-                        data_block_index[l] = block;
-                    }
-                    let o = (offset - threshold[2]) / 4 / 4 / 4 / sz;
-                    buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
-                    let block = u32::from_be_bytes(buf_u32.clone()) as usize;
-                    let l = 1;
-                    if !data_block_index[l] != block {
-                        rep!(reply, _r, self.read_data_block(block, &mut data_block[l]));
-                        data_block_index[l] = block;
-                    }
-                    let o = ((offset - threshold[2]) / 4 / 4 / sz) % block_id_capacity;
-                    buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
-                    let block = u32::from_be_bytes(buf_u32.clone()) as usize;
-                    let l = 2;
-                    if !data_block_index[l] != block {
-                        rep!(reply, _r, self.read_data_block(block, &mut data_block[l]));
-                        data_block_index[l] = block;
-                    }
-                    let o = ((offset - threshold[2]) / 4 / sz) % block_id_capacity;
-                    buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
+                    let block = calc_layer!(block, 0, ((offset - threshold[2]) / 4 / 4 / 4 / sz) % block_id_capacity);
+                    let block = calc_layer!(block, 1, ((offset - threshold[2]) / 4 / 4 / sz) % block_id_capacity);
+                    let block = calc_layer!(block, 2, ((offset - threshold[2]) / 4 / sz) % block_id_capacity);
                     rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
                 } else {
                     // out of index
