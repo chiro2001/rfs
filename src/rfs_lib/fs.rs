@@ -113,7 +113,7 @@ impl Filesystem for RFS {
         // println!("group desc data: {:x?}", data_block);
         println!("group: {:x?}", group);
         self.group_desc_table.push(group);
-        let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
+        // let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
 
         // println!("block bitmap at {} block", bg_block_bitmap);
         // ret(self.seek_block(bg_block_bitmap))?;
@@ -200,6 +200,7 @@ impl Filesystem for RFS {
         let parent = RFS::shift_ino(parent);
         rep!(reply, entries, self.get_dir_entries(parent));
         for d in entries {
+            println!("dir entry [{}] {} type {}", d.inode, d.get_name(), d.file_type);
             if d.get_name() == name.to_str().unwrap() {
                 match self.get_inode(d.inode as usize) {
                     Ok(r) => {

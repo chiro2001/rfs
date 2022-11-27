@@ -105,16 +105,13 @@ impl RFS {
     }
 
     pub fn get_inode(self: &mut Self, ino: usize) -> Result<Ext2INode> {
-        // inode entry is EXT2_INODE_SIZE bytes, how many inode in one block
-        assert_eq!(EXT2_INODE_SIZE, 128);
         // should ino minus 1?
         let inodes_per_block = self.block_size() / EXT2_INODE_SIZE;
         // assert only one group
         // let block_group = (ino - 1) / inodes_per_block;
         let offset = (ino % inodes_per_block) * EXT2_INODE_SIZE;
         let block_number = ino / inodes_per_block + self.get_group_desc().bg_inode_table as usize;
-        prv!(ino);
-        prv!(block_number);
+        prv!(ino, block_number, offset / EXT2_INODE_SIZE);
         let mut buf = self.create_block_vec();
         self.seek_block(block_number)?;
         self.read_block(&mut buf)?;
@@ -137,12 +134,12 @@ impl RFS {
             if dir.inode == 0 || dir.inode >= self.super_block.s_inodes_count || dir.rec_len == 0 {
                 break;
             }
-            println!("[p {:x}] name_len = {}, rec_len = {}", p, dir.name_len, dir.rec_len);
+            // println!("[p {:x}] name_len = {}, rec_len = {}", p, dir.name_len, dir.rec_len);
             p += dir.rec_len as usize;
-            println!("next p: {:x}; dir: {}", p, dir.to_string());
+            // println!("next p: {:x}; dir: {}", p, dir.to_string());
             dirs.push(dir);
         }
-        println!("last dir entry: {:?}", dirs.last().unwrap());
+        // println!("last dir entry: {:?}", dirs.last().unwrap());
         Ok(dirs)
     }
 
@@ -154,7 +151,10 @@ impl RFS {
     }
 
     pub fn shift_ino(ino: u64) -> usize {
-        if ino == 1 { 2 } else { ino as usize }
+        if ino == 1 { EXT2_ROOT_INO } else { ino as usize }
+        // if ino == 1 { 0 } else { ino as usize }
+        // (ino + 1) as usize
+        // ino as usize
     }
 }
 
