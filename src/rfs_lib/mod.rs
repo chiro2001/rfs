@@ -119,6 +119,7 @@ impl Filesystem for RFS {
             println!("FileSystem found!");
         }
         self.super_block.apply_from(&super_block);
+        // println!("s_log_block_size = {}", super_block.s_log_block_size);
         self.print_stats();
         println!("Init done.");
         Ok(())

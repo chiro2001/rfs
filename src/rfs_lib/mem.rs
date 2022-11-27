@@ -20,7 +20,7 @@ pub struct Ext2SuperBlockMem {
 
 impl Ext2SuperBlockMem {
     pub fn to_string(self: &Self) -> String {
-        format!("EXT2 {} inodes, {} bytes per block, free inodes {}, free blocks {}",
+        format!("EXT2 {} inodes, {} KiB per block, free inodes {}, free blocks {}",
                 self.s_inodes_count, 1 << self.s_log_block_size,
                 self.s_free_inodes_count, self.s_free_blocks_count)
     }
