@@ -5,7 +5,7 @@
  */
 use std::mem::size_of;
 use std::time::{SystemTime, UNIX_EPOCH};
-use chrono::{DateTime, NaiveDateTime};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use fuse::{FileAttr, FileType};
 use rand::Rng;
 use crate::rfs_lib::types::{le16, le32, s16};
@@ -218,7 +218,9 @@ pub struct Ext2INode {
 pub const EXT2_INODE_SIZE: usize = size_of::<Ext2INode>();
 
 pub fn utc_time(timestamp_mills: u32) -> SystemTime {
-    SystemTime::from(DateTime::from_utc(NaiveDateTime::from_timestamp_millis(self.i_atime as i64).unwrap(), 0))
+    let naive = NaiveDateTime::from_timestamp_millis(timestamp_mills as i64).unwrap();
+    let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+    SystemTime::from(datetime)
 }
 
 impl Ext2INode {

@@ -171,28 +171,56 @@ fn ret<E: std::fmt::Debug, T>(res: Result<T, E>) -> Result<T, c_int> {
     }
 }
 
-fn rep<E, T, F>(reply: Box<dyn ReplyError>, f: F)
-    where F: FnOnce() -> Result<T, E> {
-    match f() {
-        Ok(_) => {}
-        Err(_) => { reply.make_error(ENOENT) }
-    }
+// fn rep<E, F, B>(reply: B, f: F)
+//     where F: FnOnce(B) -> Result<B, E>, B: ReplyError {
+//     let mut r: B;
+//     let mut err = false;
+//     match f(reply) {
+//         Ok(_) => { return; }
+//         Err(e) => {
+//             err = true;
+//             return;
+//         }
+//     }
+// }
+
+// macro_rules! rep {
+//     ($reply:expr, $f:expr) => {
+//         {
+//             match $f {
+//                 Err
+//             }
+//         }
+//     };
+// }
+
+macro_rules! rep {
+    ($reply:expr, $n:ident, $r:expr) => {
+        let $n;
+        let _result = $r;
+        if _result.is_err() {
+            $reply.error(ENOENT);
+            return;
+        } else {
+            $n = _result.unwrap();
+        }
+    };
 }
 
 trait ReplyError {
-    fn make_error(self: &Self, err: c_int);
+    fn make_error(self: Self, err: c_int);
 }
 
 impl ReplyError for ReplyAttr {
-    fn make_error(self: &Self, err: c_int) { self.error(err) }
+    fn make_error(self: Self, err: c_int) { self.error(err) }
 }
 
 impl ReplyError for ReplyData {
-    fn make_error(self: &Self, err: c_int) { self.error(err) }
+    fn make_error(self: Self, err: c_int) { self.error(err) }
 }
 
 impl ReplyError for ReplyDirectory {
-    fn make_error(self: &Self, err: c_int) { self.error(err) }
+    fn make_error(self: Self, err: c_int) { self.error(err) }
 }
 
 impl Filesystem for RFS {
@@ -395,19 +423,31 @@ impl Filesystem for RFS {
     }
 
     fn getattr(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyAttr) {
-        rep(Box::new(reply), move || -> Result<()> {
-            let ino = ino as usize;
-            let node = self.get_inode(ino)?;
-            let attr = node.to_attr(ino);
-            reply.attr(&TTL, &attr);
-            Ok(())
-        });
+        let ino = ino as usize;
+        rep!(reply, node, self.get_inode(ino));
+        let attr = node.to_attr(ino);
+        reply.attr(&TTL, &attr);
     }
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
-        rep(Box::new(reply), move || -> Result<()> {
-            Ok(())
-        });
+        // rep(reply, move |reply| -> Result<()> {
+        //     let ino = ino as usize;
+        //     let node = self.get_inode(ino)?;
+        //     Ok(())
+        // });
+    }
+
+    fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
+        // rep(reply, move |mut reply| -> Result<()> {
+        //     let ino = ino as usize;
+        //     let dirs = self.get_dirs(ino)?;
+        //     for (i, d) in dirs.iter().enumerate() {
+        //         let inode = self.get_inode(d.inode as usize)?;
+        //         reply.add(d.inode as u64, (i + 1) as i64, inode.to_attr(d.inode as usize).kind, d.get_name());
+        //     }
+        //     reply.ok();
+        //     Ok(())
+        // });
     }
 }
 
