@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
 /*
  * Define EXT2_PREALLOCATE to preallocate data blocks for expanding files
  */
@@ -133,9 +135,9 @@ struct ext2_dx_countlimit {
  */
 pub const EXT2_NDIR_BLOCKS: usize = 12;
 pub const EXT2_IND_BLOCK: usize = EXT2_NDIR_BLOCKS;
-pub const EXT2_DIND_BLOCK: usize = (EXT2_IND_BLOCK + 1);
-pub const EXT2_TIND_BLOCK: usize = (EXT2_DIND_BLOCK + 1);
-pub const EXT2_N_BLOCKS: usize = (EXT2_TIND_BLOCK + 1);
+pub const EXT2_DIND_BLOCK: usize = EXT2_IND_BLOCK + 1;
+pub const EXT2_TIND_BLOCK: usize = EXT2_DIND_BLOCK + 1;
+pub const EXT2_N_BLOCKS: usize = EXT2_TIND_BLOCK + 1;
 
 /*
  * Inode flags
@@ -632,12 +634,12 @@ pub const EXT4_FEATURE_INCOMPAT_CASEFOLD: usize = 0x20000;
 
 pub const EXT2_FEATURE_COMPAT_SUPP: usize = 0;
 pub const EXT2_FEATURE_INCOMPAT_SUPP: usize =
-    (EXT2_FEATURE_INCOMPAT_FILETYPE | EXT4_FEATURE_INCOMPAT_MMP |
-        EXT4_FEATURE_INCOMPAT_LARGEDIR | EXT4_FEATURE_INCOMPAT_EA_INODE);
+    EXT2_FEATURE_INCOMPAT_FILETYPE | EXT4_FEATURE_INCOMPAT_MMP |
+        EXT4_FEATURE_INCOMPAT_LARGEDIR | EXT4_FEATURE_INCOMPAT_EA_INODE;
 pub const EXT2_FEATURE_RO_COMPAT_SUPP: usize =
-    (EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER | EXT2_FEATURE_RO_COMPAT_LARGE_FILE |
+    EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER | EXT2_FEATURE_RO_COMPAT_LARGE_FILE |
         EXT4_FEATURE_RO_COMPAT_DIR_NLINK | /*EXT2_FEATURE_RO_COMPAT_BTREE_DIR |*/
-        EXT4_FEATURE_RO_COMPAT_VERITY);
+        EXT4_FEATURE_RO_COMPAT_VERITY;
 
 /*
  * Structure of a directory entry
@@ -725,14 +727,14 @@ pub const EXT2_DIR_NAME_LEN_CSUM: usize = 0xDE00;
 pub const EXT2_DIR_ENTRY_HEADER_LEN: usize = 8;
 pub const EXT2_DIR_ENTRY_HASH_LEN: usize = 8;
 pub const EXT2_DIR_PAD: usize = 4;
-pub const EXT2_DIR_ROUND: usize = (EXT2_DIR_PAD - 1);
+pub const EXT2_DIR_ROUND: usize = EXT2_DIR_PAD - 1;
 
 /*
  * Constants for ext4's extended time encoding
  */
 pub const EXT4_EPOCH_BITS: usize = 2;
-pub const EXT4_EPOCH_MASK: usize = ((1 << EXT4_EPOCH_BITS) - 1);
-pub const EXT4_NSEC_MASK: usize = (!(0 as usize) << EXT4_EPOCH_BITS);
+pub const EXT4_EPOCH_MASK: usize = (1 << EXT4_EPOCH_BITS) - 1;
+pub const EXT4_NSEC_MASK: usize = !(0 as usize) << EXT4_EPOCH_BITS;
 
 /*
  * This structure is used for multiple mount protection. It is written
@@ -788,15 +790,15 @@ pub const EXT4_MMP_MIN_CHECK_INTERVAL: usize = 5;
 /*
  * Minimum size of inline data.
  */
-pub const EXT4_MIN_INLINE_DATA_SIZE: usize = (size_of::<u32>() * EXT2_N_BLOCKS);
+pub const EXT4_MIN_INLINE_DATA_SIZE: usize = size_of::<u32>() * EXT2_N_BLOCKS;
 
 /*
  * Size of a parent inode in inline data directory.
  */
-pub const EXT4_INLINE_DATA_DOTDOT_SIZE: usize = (4);
+pub const EXT4_INLINE_DATA_DOTDOT_SIZE: usize = 4;
 
 pub const EXT4_ENC_UTF8_12_1: usize = 1;
 
-pub const EXT4_ENC_STRICT_MODE_FL: usize = (1 << 0) /* Reject invalid sequences */;
+pub const EXT4_ENC_STRICT_MODE_FL: usize = 1 << 0 /* Reject invalid sequences */;
 
 
