@@ -78,23 +78,23 @@ impl RFS {
 
     fn block_disk_ratio(self: &Self) -> usize { self.block_size() / self.disk_block_size() }
 
-    fn seek_block(self: &mut Self, index: usize) -> Result<()> {
+    pub fn seek_block(self: &mut Self, index: usize) -> Result<()> {
         self.seek_disk_block(index * self.block_disk_ratio())
     }
 
-    fn read_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
+    pub fn read_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
         self.read_disk_blocks(buf, self.block_disk_ratio())
     }
 
-    fn read_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
+    pub fn read_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
         self.read_disk_blocks(buf, self.block_disk_ratio() * count)
     }
 
-    fn create_block_vec(self: &Self) -> Vec<u8> {
+    pub fn create_block_vec(self: &Self) -> Vec<u8> {
         [0 as u8].repeat(self.block_size())
     }
 
-    fn create_blocks_vec(self: &Self, count: usize) -> Vec<u8> {
+    pub fn create_blocks_vec(self: &Self, count: usize) -> Vec<u8> {
         [0 as u8].repeat(self.block_size() * count)
     }
 
@@ -102,11 +102,11 @@ impl RFS {
         self.group_desc_table.get(0).unwrap()
     }
 
-    fn print_stats(self: &Self) {
+    pub fn print_stats(self: &Self) {
         println!("fs stats: {}", self.super_block.to_string());
     }
 
-    fn get_inode(self: &mut Self, ino: usize) -> Result<Ext2INode> {
+    pub fn get_inode(self: &mut Self, ino: usize) -> Result<Ext2INode> {
         // inode entry is EXT2_INODE_SIZE bytes, how many inode in one block
         assert_eq!(EXT2_INODE_SIZE, 128);
         // should ino minus 1?
@@ -122,11 +122,37 @@ impl RFS {
         Ok(unsafe { deserialize_row(&buf[offset..]) })
     }
 
-    fn get_data_block(self: &mut Self, block: usize) -> Result<Vec<u8>> {
+    pub fn get_data_block(self: &mut Self, block: usize) -> Result<Vec<u8>> {
         self.seek_block(block)?;
         let mut buf = self.create_block_vec();
         self.read_block(&mut buf)?;
         Ok(buf)
+    }
+
+    pub fn get_block_dirs(self: &mut Self, block: usize) -> Result<Vec<Ext2DirEntry>> {
+        let data_block = self.get_data_block(block)?;
+        let mut p = 0;
+        let mut dirs = vec![];
+        while p <= data_block.len() {
+            let dir: Ext2DirEntry = unsafe { deserialize_row(&data_block[p..]) };
+            if dir.name_len == 0 { break; }
+            // println!("[p {:x}] name_len = {}", p, dir.name_len);
+            // align p to word
+            p += EXT2_DIR_ENTRY_BASE_SIZE + dir.name_len as usize;
+            let inc = p & 0x3;
+            p &= !0x3;
+            if inc != 0 { p += 0x4; }
+            // println!("next p: {:x}", p);
+            dirs.push(dir);
+        }
+        Ok(dirs)
+    }
+
+    pub fn get_dirs(self: &mut Self, ino: usize) -> Result<Vec<Ext2DirEntry>> {
+        let inode = self.get_inode(ino)?;
+        prv!(inode);
+        // TODO: walk all blocks, including indirect blocks
+        self.get_block_dirs(inode.i_block[0] as usize)
     }
 }
 
@@ -312,6 +338,11 @@ impl Filesystem for RFS {
 
         for d in dirs {
             println!("dir {}", d.to_string());
+        }
+
+        let dirs = ret(self.get_dirs(EXT2_ROOT_INO))?;
+        for d in dirs {
+            println!("ROOT/{}", d.to_string());
         }
 
         println!("Init done.");
