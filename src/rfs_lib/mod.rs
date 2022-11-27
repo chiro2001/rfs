@@ -140,6 +140,10 @@ impl Filesystem for RFS {
         self.driver_info.consts.layout_size = u32::from_be_bytes(buf.clone());
         ret(self.driver.ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf))?;
         self.driver_info.consts.iounit_size = u32::from_be_bytes(buf.clone());
+        println!("size of super block struct is {}", size_of::<Ext2SuperBlock>());
+        println!("size of group desc struct is {}", size_of::<Ext2GroupDesc>());
+        println!("size of inode struct is {}", size_of::<Ext2INode>());
+
         // at lease 32 blocks
         println!("Disk {} has {} IO blocks.", file, self.driver_info.consts.disk_block_count());
         if self.disk_size() < 32 * 0x400 {
@@ -254,6 +258,10 @@ impl Filesystem for RFS {
         // inode_table.iter().enumerate().for_each(|it| {
         //     println!("inode[{}]: {:?}", it.0, it.1);
         // });
+
+        let inode_root = ret(self.get_inode(2))?;
+        prv!(inode_root);
+
         let inode = &inode_table[self.super_block.s_first_ino as usize + 1];
         println!("first inode table is [{}+1]: {:?}", self.super_block.s_first_ino, inode);
         println!("pointing to blocks: {:x?}", inode.i_block);
@@ -261,10 +269,10 @@ impl Filesystem for RFS {
         println!("got inode table: {:x?}", inode);
         // println!("block [13] is {:x}, ")
 
+        let indirect_block_id = inode.i_block[13] as usize;
+        let indirect_inode = ret(self.get_inode(indirect_block_id))?;
+        prv!(indirect_inode);
 
-        println!("size of super block struct is {}", size_of::<Ext2SuperBlock>());
-        println!("size of group desc struct is {}", size_of::<Ext2GroupDesc>());
-        println!("size of inode struct is {}", size_of::<Ext2INode>());
         println!("Init done.");
         Ok(())
     }

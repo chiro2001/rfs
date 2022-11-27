@@ -147,7 +147,7 @@ macro_rules! get_offset {
 macro_rules! prv {
     ($e:expr) => {
         {
-            println!("{} = {}", stringify!($e), $e);
+            println!("{} = {:?}", stringify!($e), $e);
         }
     };
 }
