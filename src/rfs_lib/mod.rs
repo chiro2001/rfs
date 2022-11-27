@@ -10,11 +10,11 @@ pub mod utils;
 pub mod desc;
 pub mod types;
 pub mod mem;
-pub mod macros;
 
 use desc::Ext2SuperBlock;
 use utils::deserialize_row;
 use desc::Ext2GroupDesc;
+use mem::Ext2SuperBlockMem;
 
 #[cxx::bridge]
 mod ffi {
@@ -30,11 +30,12 @@ pub fn add(left: usize, right: usize) -> usize {
 pub struct RFS {
     pub driver: Box<dyn DiskDriver>,
     pub driver_info: DiskInfo,
+    pub super_block: Ext2SuperBlockMem,
 }
 
 impl RFS {
     pub fn new(driver: Box<dyn DiskDriver>) -> Self {
-        Self { driver, driver_info: Default::default() }
+        Self { driver, driver_info: Default::default(), super_block: Default::default() }
     }
 
     fn disk_block_size(self: &mut Self) -> usize { self.driver_info.consts.iounit_size as usize }
@@ -89,7 +90,8 @@ impl Filesystem for RFS {
             println!("fs not found! creating super block...");
             let mut group_desc = Ext2GroupDesc::default();
             super_block = Ext2SuperBlock::default();
-            // super_block.s_log_block_size
+            self.super_block = Ext2SuperBlockMem::default();
+            self.super_block.apply_mem(&mut super_block);
         }
         println!("Init done.");
         Ok(())
