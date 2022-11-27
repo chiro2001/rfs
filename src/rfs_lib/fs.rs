@@ -235,7 +235,7 @@ impl Filesystem for RFS {
         let mut offset = offset as usize;
         let ino = RFS::shift_ino(ino);
         rep!(reply, node, self.get_inode(ino));
-        println!("to read block lists: {:x?}", node.i_block);
+        // println!("to read block lists: {:x?}", node.i_block);
         let layer = self.block_size() / 4;
         let layer_layer = layer * layer;
         let layer2 = layer * 2;
@@ -273,7 +273,7 @@ impl Filesystem for RFS {
                 rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
             } else {
                 if offset < threshold[1] {
-                    println!("layer 1, offset = {:x}, size = {:x}", offset, size);
+                    // println!("layer 1, offset = {:x}, size = {:x}", offset, size);
                     // layer 1
                     let block = node.i_block[12] as usize;
                     if block == 0 { commit_data!(); }
@@ -287,7 +287,7 @@ impl Filesystem for RFS {
                     let block = u32::from_be_bytes(buf_u32.clone()) as usize;
                     rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
                 } else if offset < threshold[2] {
-                    println!("layer 2");
+                    // println!("layer 2");
                     // layer 2
                     let block = node.i_block[13] as usize;
                     if block == 0 { commit_data!(); }
@@ -308,7 +308,7 @@ impl Filesystem for RFS {
                     buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
                     rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
                 } else if offset < threshold[3] {
-                    println!("layer 3");
+                    // println!("layer 3");
                     // layer 3
                     let block = node.i_block[13] as usize;
                     if block == 0 { commit_data!(); }

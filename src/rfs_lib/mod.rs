@@ -69,7 +69,7 @@ impl RFS {
 
     fn seek_disk_block(self: &mut Self, index: usize) -> Result<()> {
         let sz = self.disk_block_size();
-        println!("DISK seek to {:x}", index * sz);
+        // println!("DISK seek to {:x}", index * sz);
         let _n = self.driver.ddriver_seek((index * sz) as i64, SeekType::Set)?;
         Ok(())
     }
