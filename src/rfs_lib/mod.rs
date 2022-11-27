@@ -13,12 +13,10 @@ pub mod desc;
 pub mod types;
 pub mod mem;
 
-use desc::Ext2SuperBlock;
-use utils::deserialize_row;
-use desc::Ext2GroupDesc;
-use mem::Ext2SuperBlockMem;
-use desc::Ext2INode;
 use crate::{get_offset, prv};
+use utils::*;
+use mem::*;
+use desc::*;
 
 #[cxx::bridge]
 mod ffi {
@@ -109,14 +107,19 @@ impl RFS {
     }
 
     fn get_inode(self: &mut Self, ino: usize) -> Result<Ext2INode> {
-        // inode entry is 128 bytes, how many inode in one block
-        let inode_count_one_block = self.block_size() / 128;
-        let block_number = ino / inode_count_one_block + self.get_group_desc().bg_inode_table as usize;
+        // inode entry is EXT2_INODE_SIZE bytes, how many inode in one block
+        assert_eq!(EXT2_INODE_SIZE, 128);
+        // should ino minus 1?
+        let inodes_per_block = self.block_size() / EXT2_INODE_SIZE;
+        // assert only one group
+        // let block_group = (ino - 1) / inodes_per_block;
+        let offset = (ino % inodes_per_block) * EXT2_INODE_SIZE;
+        let block_number = ino / inodes_per_block + self.get_group_desc().bg_inode_table as usize;
         prv!(block_number);
         let mut buf = self.create_block_vec();
         self.seek_block(block_number)?;
         self.read_block(&mut buf)?;
-        Ok(unsafe { deserialize_row(&buf[128 * (ino % inode_count_one_block)..]) })
+        Ok(unsafe { deserialize_row(&buf[offset..]) })
     }
 }
 
@@ -259,9 +262,6 @@ impl Filesystem for RFS {
         //     println!("inode[{}]: {:?}", it.0, it.1);
         // });
 
-        let inode_root = ret(self.get_inode(2))?;
-        prv!(inode_root);
-
         let inode = &inode_table[self.super_block.s_first_ino as usize + 1];
         println!("first inode table is [{}+1]: {:?}", self.super_block.s_first_ino, inode);
         println!("pointing to blocks: {:x?}", inode.i_block);
@@ -269,9 +269,15 @@ impl Filesystem for RFS {
         println!("got inode table: {:x?}", inode);
         // println!("block [13] is {:x}, ")
 
-        let indirect_block_id = inode.i_block[13] as usize;
-        let indirect_inode = ret(self.get_inode(indirect_block_id))?;
-        prv!(indirect_inode);
+        let inode_root = ret(self.get_inode(EXT2_ROOT_INO))?;
+        prv!(inode_root);
+
+        // let indirect_block_id = inode_root.i_block[13] as usize;
+        // let indirect_inode = ret(self.get_inode(indirect_block_id))?;
+        // prv!(indirect_inode);
+
+        let block_id = inode_root.i_block[0];
+        prv!(block_id);
 
         println!("Init done.");
         Ok(())

@@ -212,6 +212,8 @@ pub struct Ext2INode {
     pub i_reserved: u16,
 }
 
+pub const EXT2_INODE_SIZE: usize = size_of::<Ext2INode>();
+
 impl Default for Ext2INode {
     fn default() -> Self {
         Self {
