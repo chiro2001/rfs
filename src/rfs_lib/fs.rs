@@ -2,14 +2,14 @@ use std::ffi::OsStr;
 use std::mem::size_of;
 use std::os::raw::c_int;
 use std::process::Stdio;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::Local;
 use disk_driver::{IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use execute::Execute;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
 use libc::{ENOENT, input_id};
 use log::*;
-use crate::{prv, rep};
+use crate::{prv, rep, rep_mut};
 use crate::rfs_lib::desc::{Ext2GroupDesc, Ext2INode, Ext2SuperBlock};
 use crate::rfs_lib::{TTL, RFS};
 use crate::rfs_lib::utils::*;
@@ -151,10 +151,60 @@ impl Filesystem for RFS {
         reply.attr(&TTL, &attr);
     }
 
-    fn setattr(&mut self, _req: &Request<'_>, ino: u64, mode: Option<u32>, uid: Option<u32>, gid: Option<u32>, size: Option<u64>, _atime: Option<SystemTime>, _mtime: Option<SystemTime>, _fh: Option<u64>, _crtime: Option<SystemTime>, chgtime: Option<SystemTime>, _bkuptime: Option<SystemTime>, flags: Option<u32>, reply: ReplyAttr) {
+    fn setattr(&mut self, _req: &Request<'_>, ino: u64, mode: Option<u32>,
+               uid: Option<u32>, gid: Option<u32>, size: Option<u64>,
+               atime: Option<SystemTime>, mtime: Option<SystemTime>, _fh: Option<u64>,
+               _crtime: Option<SystemTime>, chgtime: Option<SystemTime>,
+               bkuptime: Option<SystemTime>, flags: Option<u32>, reply: ReplyAttr) {
         prv!("getattr", ino);
         let ino = RFS::shift_ino(ino);
-        rep!(reply, node, self.get_inode(ino));
+        rep_mut!(reply, node, self.get_inode(ino));
+        match mode {
+            Some(v) => node.i_mode = v as u16,
+            _ => {}
+        };
+        match uid {
+            Some(v) => {
+                node.i_uid = (v & 0xFF) as u16;
+                node.i_uid_high = (v >> 16) as u16;
+            }
+            _ => {}
+        };
+        match gid {
+            Some(v) => {
+                node.i_gid = (v & 0xFF) as u16;
+                node.i_gid_high = (v >> 16) as u16;
+            }
+            _ => {}
+        };
+        match size {
+            Some(v) => {
+                node.i_size = (v & 0xFFFF) as u32;
+                node.i_size_high = (v >> 32) as u32;
+            }
+            _ => {}
+        };
+        match atime {
+            Some(v) => node.i_atime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
+            _ => {}
+        };
+        match mtime {
+            Some(v) => node.i_mtime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
+            _ => {}
+        };
+        match chgtime {
+            Some(v) => node.i_ctime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
+            _ => {}
+        };
+        match bkuptime {
+            // not checked
+            Some(v) => node.i_dtime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
+            _ => {}
+        };
+        match flags {
+            Some(v) => node.i_flags = v,
+            _ => {}
+        };
         rep!(reply, self.set_inode(ino, &node));
     }
 
@@ -267,6 +317,4 @@ impl Filesystem for RFS {
         }
         reply.ok();
     }
-
-
 }

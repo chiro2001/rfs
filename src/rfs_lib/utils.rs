@@ -179,6 +179,23 @@ macro_rules! rep {
     };
 }
 
+#[macro_export]
+macro_rules! rep_mut {
+    ($reply:expr, $n:ident, $r:expr) => {
+        let mut $n;
+        let _result = $r;
+        if _result.is_err() {
+            $reply.error(ENOENT);
+            return;
+        } else {
+            $n = _result.unwrap();
+        }
+    };
+    ($reply:expr, $r:expr) => {
+        rep!($reply, _r, $r);
+    };
+}
+
 pub fn ret<E, T>(res: Result<T, E>) -> Result<T, c_int> where E: std::fmt::Debug {
     match res {
         Ok(ok) => Ok(ok),
