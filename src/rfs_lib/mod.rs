@@ -126,6 +126,12 @@ impl RFS {
         Ok(buf)
     }
 
+    pub fn read_data_block(self: &mut Self, block: usize, buf: &mut [u8]) -> Result<()> {
+        self.seek_block(block)?;
+        self.read_block(buf)?;
+        Ok(())
+    }
+
     pub fn get_block_dir_entries(self: &mut Self, block: usize) -> Result<Vec<Ext2DirEntry>> {
         let data_block = self.get_data_block(block)?;
         let mut p = 0;

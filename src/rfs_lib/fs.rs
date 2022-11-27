@@ -231,12 +231,42 @@ impl Filesystem for RFS {
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
         prv!("read", ino, offset, size);
+        let mut offset = offset as usize;
         let ino = RFS::shift_ino(ino);
         rep!(reply, node, self.get_inode(ino));
         println!("to read block lists: {:x?}", node.i_block);
-        let block = node.i_block[0] as usize;
-        rep!(reply, data_block, self.get_data_block(block));
-        reply.data(&data_block[offset as usize..]);
+        let layer = self.block_size() / 4;
+        let sz = self.block_size();
+        assert_eq!(offset % sz, 0);
+        let max_read_blocks = 32;
+        let mut data_blocks = self.create_blocks_vec(max_read_blocks);
+        let base = offset;
+        macro_rules! commit_data {
+            () => {
+                reply.data(&data_blocks[..offset - base]);
+                return;
+            };
+        }
+        loop {
+            if offset - base >= max_read_blocks * sz { commit_data!(); }
+            if offset < sz * 12 {
+                // block 0-11: direct addressing
+                let block = node.i_block[offset / sz] as usize;
+                if block == 0 { commit_data!(); }
+                rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
+            } else if offset < sz * (12 + layer) {
+                // layer 1
+            } else if offset < sz * (12 + layer + layer * layer) {
+                // layer 2
+            } else if offset < sz * (11 + layer + 2 * layer + layer * layer) {
+                // layer 3
+            } else {
+                // out of index
+                reply.error(ENOENT);
+                return;
+            }
+            offset += sz;
+        }
     }
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
