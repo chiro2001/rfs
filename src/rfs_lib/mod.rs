@@ -34,6 +34,7 @@ pub struct RFS {
     pub driver: Box<dyn DiskDriver>,
     pub driver_info: DiskInfo,
     pub super_block: Ext2SuperBlockMem,
+    pub group_desc_table: Vec<Ext2GroupDesc>,
     // ext2 may has boot reserved 1 block prefix, but not in used
     pub filesystem_first_block: usize,
 }
@@ -41,7 +42,13 @@ pub struct RFS {
 impl RFS {
     #[allow(dead_code)]
     pub fn new(driver: Box<dyn DiskDriver>) -> Self {
-        Self { driver, driver_info: Default::default(), super_block: Default::default(), filesystem_first_block: 0 }
+        Self {
+            driver,
+            driver_info: Default::default(),
+            super_block: Default::default(),
+            group_desc_table: vec![],
+            filesystem_first_block: 0,
+        }
     }
 
     fn disk_block_size(self: &Self) -> usize { self.driver_info.consts.iounit_size as usize }
@@ -81,6 +88,14 @@ impl RFS {
 
     fn read_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
         self.read_disk_blocks(buf, self.block_disk_ratio() * count)
+    }
+
+    fn create_block_vec(self: &Self) -> Vec<u8> {
+        [0 as u8].repeat(self.block_size())
+    }
+
+    fn get_group_desc(self: &mut Self) -> &Ext2GroupDesc {
+        self.group_desc_table.get(0).unwrap()
     }
 
     fn print_stats(self: &Self) {
@@ -188,10 +203,24 @@ impl Filesystem for RFS {
         // read block group desc table
         println!("first start block: {}", self.super_block.s_first_data_block);
         rret(self.seek_block(self.super_block.s_first_data_block as usize))?;
-        let mut data_block = [0 as u8].repeat(self.block_size());
+        let mut data_block = self.create_block_vec();
         rret(self.read_block(&mut data_block))?;
+        // just assert there is only one group now
         let group: Ext2GroupDesc = unsafe { deserialize_row(&data_block) };
         println!("group: {:?}", group);
+        self.group_desc_table.push(group);
+        let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
+        println!("block bitmap at {} block", bg_block_bitmap);
+        rret(self.seek_block(bg_block_bitmap))?;
+        let mut bitmap_data_block = self.create_block_vec();
+        rret(self.read_block(&mut bitmap_data_block))?;
+
+        let bg_inode_bitmap = self.get_group_desc().bg_inode_bitmap as usize;
+        println!("inode bitmap at {} block", bg_inode_bitmap);
+        rret(self.seek_block(bg_inode_bitmap))?;
+        let mut bitmap_inode = self.create_block_vec();
+        rret(self.read_block(&mut bitmap_inode))?;
+        println!("inode bit map: {:?}", &bitmap_inode[..32]);
         println!("Init done.");
         Ok(())
     }
