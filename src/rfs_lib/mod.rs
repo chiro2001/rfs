@@ -161,7 +161,7 @@ impl RFS {
     }
 }
 
-fn ret<E: std::fmt::Debug, T>(res: Result<T, E>) -> Result<T, c_int> {
+fn ret<E, T>(res: Result<T, E>) -> Result<T, c_int> where E: std::fmt::Debug {
     match res {
         Ok(ok) => Ok(ok),
         Err(e) => {
@@ -170,29 +170,6 @@ fn ret<E: std::fmt::Debug, T>(res: Result<T, E>) -> Result<T, c_int> {
         }
     }
 }
-
-// fn rep<E, F, B>(reply: B, f: F)
-//     where F: FnOnce(B) -> Result<B, E>, B: ReplyError {
-//     let mut r: B;
-//     let mut err = false;
-//     match f(reply) {
-//         Ok(_) => { return; }
-//         Err(e) => {
-//             err = true;
-//             return;
-//         }
-//     }
-// }
-
-// macro_rules! rep {
-//     ($reply:expr, $f:expr) => {
-//         {
-//             match $f {
-//                 Err
-//             }
-//         }
-//     };
-// }
 
 macro_rules! rep {
     ($reply:expr, $n:ident, $r:expr) => {
@@ -325,89 +302,78 @@ impl Filesystem for RFS {
         println!("group: {:x?}", group);
         self.group_desc_table.push(group);
         let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
-        println!("block bitmap at {} block", bg_block_bitmap);
-        ret(self.seek_block(bg_block_bitmap))?;
-        let mut bitmap_data_block = self.create_block_vec();
-        ret(self.read_block(&mut bitmap_data_block))?;
-        println!("block bit map: {:?}", &bitmap_data_block[..32]);
 
-        let bg_inode_bitmap = self.get_group_desc().bg_inode_bitmap as usize;
-        println!("inode bitmap at {} block", bg_inode_bitmap);
-        ret(self.seek_block(bg_inode_bitmap))?;
-        let mut bitmap_inode = self.create_block_vec();
-        ret(self.read_block(&mut bitmap_inode))?;
-        println!("inode bit map: {:?}", &bitmap_inode[..32]);
-
-        let inode_table_n = 4 as usize;
-        let bg_inode_table = self.get_group_desc().bg_inode_table as usize;
-        println!("inode table start at {} block", bg_inode_table);
-        ret(self.seek_block(bg_inode_table))?;
-        let mut bg_inode_table = self.create_blocks_vec(inode_table_n);
-        ret(self.read_blocks(&mut bg_inode_table, inode_table_n))?;
-        println!("inode table: {:?}", &bg_inode_table[..32]);
-        let inode_table: Vec<Ext2INode> = (0..(bg_inode_table.len() / size_of::<Ext2INode>())).map(|index| {
-            unsafe { deserialize_row(&bg_inode_table[(index * size_of::<Ext2INode>())..]) }
-        }).collect();
-        // inode_table.iter().enumerate().for_each(|it| {
-        //     println!("inode[{}]: {:?}", it.0, it.1);
-        // });
-
-        let inode = &inode_table[self.super_block.s_first_ino as usize + 1];
-        println!("first inode table is [{}+1]: {:?}", self.super_block.s_first_ino, inode);
-        println!("pointing to blocks: {:x?}", inode.i_block);
-        let inode = ret(self.get_inode(self.super_block.s_first_ino as usize + 1))?;
-        println!("got inode table: {:x?}", inode);
-        // println!("block [13] is {:x}, ")
-
-        let inode_root = ret(self.get_inode(EXT2_ROOT_INO))?;
-        prv!(inode_root);
-
-        // let indirect_block_id = inode_root.i_block[13] as usize;
-        // let indirect_inode = ret(self.get_inode(indirect_block_id))?;
-        // prv!(indirect_inode);
-
-        let block_id = inode_root.i_block[0] as usize;
-        prv!(block_id);
-
-        let data_block = ret(self.get_data_block(block_id))?;
-        prv!(&data_block[..64]);
-
-        prv!(EXT2_DIR_ENTRY_BASE_SIZE);
-        prv!(size_of::<char>());
-        // let dirs: Vec<Ext2DirEntry> = (0..(self.block_size() / EXT2_DIR_ENTRY_BASE_SIZE)).map(|i| {
-        //     unsafe { deserialize_row(&data_block[i * EXT2_DIR_ENTRY_BASE_SIZE..]) }
+        // println!("block bitmap at {} block", bg_block_bitmap);
+        // ret(self.seek_block(bg_block_bitmap))?;
+        // let mut bitmap_data_block = self.create_block_vec();
+        // ret(self.read_block(&mut bitmap_data_block))?;
+        // println!("block bit map: {:?}", &bitmap_data_block[..32]);
+        //
+        // let bg_inode_bitmap = self.get_group_desc().bg_inode_bitmap as usize;
+        // println!("inode bitmap at {} block", bg_inode_bitmap);
+        // ret(self.seek_block(bg_inode_bitmap))?;
+        // let mut bitmap_inode = self.create_block_vec();
+        // ret(self.read_block(&mut bitmap_inode))?;
+        // println!("inode bit map: {:?}", &bitmap_inode[..32]);
+        //
+        // let inode_table_n = 4 as usize;
+        // let bg_inode_table = self.get_group_desc().bg_inode_table as usize;
+        // println!("inode table start at {} block", bg_inode_table);
+        // ret(self.seek_block(bg_inode_table))?;
+        // let mut bg_inode_table = self.create_blocks_vec(inode_table_n);
+        // ret(self.read_blocks(&mut bg_inode_table, inode_table_n))?;
+        // println!("inode table: {:?}", &bg_inode_table[..32]);
+        // let inode_table: Vec<Ext2INode> = (0..(bg_inode_table.len() / size_of::<Ext2INode>())).map(|index| {
+        //     unsafe { deserialize_row(&bg_inode_table[(index * size_of::<Ext2INode>())..]) }
         // }).collect();
-        let mut p = 0;
-        let mut dirs = vec![];
-        while p <= data_block.len() {
-            let dir: Ext2DirEntry = unsafe { deserialize_row(&data_block[p..]) };
-            if dir.name_len == 0 { break; }
-            println!("[p {:x}] name_len = {}", p, dir.name_len);
-            // align p to word
-            p += EXT2_DIR_ENTRY_BASE_SIZE + dir.name_len as usize;
-            let inc = p & 0x3;
-            p &= !0x3;
-            if inc != 0 { p += 0x4; }
-            println!("next p: {:x}", p);
-            // println!("dir {:?}", dir);
-            dirs.push(dir);
-        }
-
-        for d in dirs {
-            println!("dir {}", d.to_string());
-        }
-
-        let dirs = ret(self.get_dirs(EXT2_ROOT_INO))?;
-        for d in &dirs {
-            println!("ROOT/{}", d.to_string());
-        }
-        let dir = &dirs[2];
-        prv!(dir);
-        let dirs2 = ret(self.get_dirs(dir.inode as usize))?;
-        for d in &dirs2 {
-            println!("{}/{}", dir.get_name(), d.to_string());
-        }
-
+        // let inode = &inode_table[self.super_block.s_first_ino as usize + 1];
+        // println!("first inode table is [{}+1]: {:?}", self.super_block.s_first_ino, inode);
+        // println!("pointing to blocks: {:x?}", inode.i_block);
+        // let inode = ret(self.get_inode(self.super_block.s_first_ino as usize + 1))?;
+        // println!("got inode table: {:x?}", inode);
+        // // println!("block [13] is {:x}, ")
+        //
+        // let inode_root = ret(self.get_inode(EXT2_ROOT_INO))?;
+        // prv!(inode_root);
+        //
+        // let block_id = inode_root.i_block[0] as usize;
+        // prv!(block_id);
+        //
+        // let data_block = ret(self.get_data_block(block_id))?;
+        // prv!(&data_block[..64]);
+        //
+        // prv!(EXT2_DIR_ENTRY_BASE_SIZE);
+        // prv!(size_of::<char>());
+        // let mut p = 0;
+        // let mut dirs = vec![];
+        // while p <= data_block.len() {
+        //     let dir: Ext2DirEntry = unsafe { deserialize_row(&data_block[p..]) };
+        //     if dir.name_len == 0 { break; }
+        //     println!("[p {:x}] name_len = {}", p, dir.name_len);
+        //     // align p to word
+        //     p += EXT2_DIR_ENTRY_BASE_SIZE + dir.name_len as usize;
+        //     let inc = p & 0x3;
+        //     p &= !0x3;
+        //     if inc != 0 { p += 0x4; }
+        //     println!("next p: {:x}", p);
+        //     // println!("dir {:?}", dir);
+        //     dirs.push(dir);
+        // }
+        //
+        // for d in dirs {
+        //     println!("dir {}", d.to_string());
+        // }
+        //
+        // let dirs = ret(self.get_dirs(EXT2_ROOT_INO))?;
+        // for d in &dirs {
+        //     println!("ROOT/{}", d.to_string());
+        // }
+        // let dir = &dirs[2];
+        // prv!(dir);
+        // let dirs2 = ret(self.get_dirs(dir.inode as usize))?;
+        // for d in &dirs2 {
+        //     println!("{}/{}", dir.get_name(), d.to_string());
+        // }
 
         println!("Init done.");
         Ok(())
@@ -430,24 +396,18 @@ impl Filesystem for RFS {
     }
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
-        // rep(reply, move |reply| -> Result<()> {
-        //     let ino = ino as usize;
-        //     let node = self.get_inode(ino)?;
-        //     Ok(())
-        // });
+        let ino = ino as usize;
+        rep!(reply, node, self.get_inode(ino));
     }
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
-        // rep(reply, move |mut reply| -> Result<()> {
-        //     let ino = ino as usize;
-        //     let dirs = self.get_dirs(ino)?;
-        //     for (i, d) in dirs.iter().enumerate() {
-        //         let inode = self.get_inode(d.inode as usize)?;
-        //         reply.add(d.inode as u64, (i + 1) as i64, inode.to_attr(d.inode as usize).kind, d.get_name());
-        //     }
-        //     reply.ok();
-        //     Ok(())
-        // });
+        let ino = ino as usize;
+        rep!(reply, dirs, self.get_dirs(ino));
+        for (i, d) in dirs.iter().enumerate() {
+            rep!(reply, inode, self.get_inode(d.inode as usize));
+            reply.add(d.inode as u64, (i + 1) as i64, inode.to_attr(d.inode as usize).kind, d.get_name());
+        }
+        reply.ok();
     }
 }
 
