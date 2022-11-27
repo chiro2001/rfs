@@ -66,7 +66,7 @@ struct Ext2AclEntry /* Access Control List Entry */
 /*
  * Structure of a blocks group descriptor
  */
-#[derive(Default)]
+#[derive(Debug, Default)]
 #[repr(C, align(8))]
 pub struct Ext2GroupDesc {
     pub bg_block_bitmap: u32,      /* Blocks bitmap block */
@@ -331,8 +331,7 @@ pub struct Ext2SuperBlock {
     pub s_mtime: u32,                     /* Mount time */
     /*030*/ pub s_wtime: u32,             /* Write time */
     pub s_mnt_count: u16,                 /* Mount count */
-    // pub s_max_mnt_count: s16,             /* Maximal mount count */
-    pub s_max_mnt_count: u16,             /* Maximal mount count */
+    pub s_max_mnt_count: s16,             /* Maximal mount count */
     pub s_magic: u16,                     /* Magic signature */
     pub s_state: u16,                     /* File system state */
     pub s_errors: u16,                    /* Behaviour when detecting errors */
