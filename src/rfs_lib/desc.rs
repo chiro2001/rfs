@@ -70,7 +70,7 @@ struct Ext2AclEntry /* Access Control List Entry */
  * Structure of a blocks group descriptor
  */
 #[derive(Debug, Default)]
-#[repr(C, align(8))]
+#[repr(C, align(2))]
 pub struct Ext2GroupDesc {
     pub bg_block_bitmap: u32,      /* Blocks bitmap block */
     pub bg_inode_bitmap: u32,      /* Inodes bitmap block */
@@ -188,7 +188,7 @@ pub const EXT2_FL_USER_VISIBLE: usize = 0x604BDFFF    /* User visible flags */;
 pub const EXT2_FL_USER_MODIFIABLE: usize = 0x604B80FF /* User modifiable flags */;
 
 #[derive(Debug)]
-#[repr(C, align(8))]
+#[repr(C, align(2))]
 pub struct Ext2INode {
     /*00*/ pub i_mode: u16,  /* File mode */
     pub i_uid: u16,          /* Low 16 bits of Owner Uid */
@@ -360,7 +360,7 @@ pub const EXT2_LABEL_LEN: usize = 16;
  * Structure of the super block
  */
 #[derive(Debug)]
-#[repr(C, align(8))]
+#[repr(C, align(2))]
 pub struct Ext2SuperBlock {
     /*000*/ pub s_inodes_count: u32,      /* Inodes count */
     pub s_blocks_count: u32,              /* Blocks count */
@@ -702,7 +702,7 @@ pub const EXT2_FEATURE_RO_COMPAT_SUPP: usize =
 pub const EXT2_NAME_LEN: usize = 255;
 
 #[derive(Debug)]
-#[repr(C, align(4))]
+#[repr(C, align(1))]
 pub struct Ext2DirEntry {
     pub inode: u32,              /* Inode number */
     pub rec_len: u16,            /* Directory entry length */

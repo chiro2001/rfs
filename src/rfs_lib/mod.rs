@@ -142,16 +142,16 @@ impl RFS {
         while p <= data_block.len() {
             let dir: Ext2DirEntry = unsafe { deserialize_row(&data_block[p..]) };
             if dir.inode == 0 || dir.inode >= self.super_block.s_inodes_count { break; }
-            println!("[p {:x}] name_len = {}", p, dir.name_len);
+            // println!("[p {:x}] name_len = {}", p, dir.name_len);
             // align p to word
             p += EXT2_DIR_ENTRY_BASE_SIZE + dir.name_len as usize;
             let inc = p & 0x3;
             p &= !0x3;
             if inc != 0 { p += 0x4; }
-            println!("next p: {:x}; dir: {}", p, dir.to_string());
+            // println!("next p: {:x}; dir: {}", p, dir.to_string());
             dirs.push(dir);
         }
-        println!("last dir entry: {:?}", dirs.last().unwrap());
+        // println!("last dir entry: {:?}", dirs.last().unwrap());
         Ok(dirs)
     }
 
