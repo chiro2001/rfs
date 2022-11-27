@@ -233,6 +233,10 @@ impl Filesystem for RFS {
         prv!("read", ino, offset, size);
         let ino = RFS::shift_ino(ino);
         rep!(reply, node, self.get_inode(ino));
+        println!("to read block lists: {:x?}", node.i_block);
+        let block = node.i_block[0] as usize;
+        rep!(reply, data_block, self.get_data_block(block));
+        reply.data(&data_block[offset as usize..]);
     }
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
