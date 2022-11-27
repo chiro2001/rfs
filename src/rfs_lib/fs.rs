@@ -231,6 +231,7 @@ impl Filesystem for RFS {
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
         prv!("read", ino, offset, size);
+        println!("#read: offset = {:x}, size = {:x}", offset, size);
         let mut offset = offset as usize;
         let ino = RFS::shift_ino(ino);
         rep!(reply, node, self.get_inode(ino));
@@ -239,9 +240,11 @@ impl Filesystem for RFS {
         let layer_layer = layer * layer;
         let layer2 = layer * 2;
         let sz = self.block_size();
+        let size = size as usize;
         let block_id_capacity = sz / 4;
         assert_eq!(offset % sz, 0);
-        let max_read_blocks = 32;
+        assert_eq!(size % sz, 0);
+        let max_read_blocks = size / sz;
         let mut data_blocks = self.create_blocks_vec(max_read_blocks);
         let mut data_block = vec![self.create_block_vec(); 3];
         let mut data_block_index = [usize::MAX as usize; 3];
@@ -254,12 +257,15 @@ impl Filesystem for RFS {
             sz * (11 + layer + layer2 + layer_layer)];
         macro_rules! commit_data {
             () => {
+                println!("#commit {} KiB data", (offset - base) / 0x400);
                 reply.data(&data_blocks[..offset - base]);
                 return;
             };
         }
         loop {
-            if offset - base >= max_read_blocks * sz { commit_data!(); }
+            if offset - base >= max_read_blocks * sz || offset >= base + size as usize {
+                commit_data!();
+            }
             if offset < threshold[0] {
                 // block 0-11: direct addressing
                 let block = node.i_block[offset / sz] as usize;
@@ -267,6 +273,7 @@ impl Filesystem for RFS {
                 rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
             } else {
                 if offset < threshold[1] {
+                    println!("layer 1, offset = {:x}, size = {:x}", offset, size);
                     // layer 1
                     let block = node.i_block[12] as usize;
                     if block == 0 { commit_data!(); }
@@ -280,6 +287,7 @@ impl Filesystem for RFS {
                     let block = u32::from_be_bytes(buf_u32.clone()) as usize;
                     rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
                 } else if offset < threshold[2] {
+                    println!("layer 2");
                     // layer 2
                     let block = node.i_block[13] as usize;
                     if block == 0 { commit_data!(); }
@@ -300,6 +308,7 @@ impl Filesystem for RFS {
                     buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
                     rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
                 } else if offset < threshold[3] {
+                    println!("layer 3");
                     // layer 3
                     let block = node.i_block[13] as usize;
                     if block == 0 { commit_data!(); }
@@ -329,6 +338,7 @@ impl Filesystem for RFS {
                     rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
                 } else {
                     // out of index
+                    println!("#ERROR");
                     reply.error(ENOENT);
                     return;
                 }
