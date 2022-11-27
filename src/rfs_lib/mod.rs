@@ -121,6 +121,13 @@ impl RFS {
         self.read_block(&mut buf)?;
         Ok(unsafe { deserialize_row(&buf[offset..]) })
     }
+
+    fn get_data_block(self: &mut Self, block: usize) -> Result<Vec<u8>> {
+        self.seek_block(block)?;
+        let mut buf = self.create_block_vec();
+        self.read_block(&mut buf)?;
+        Ok(buf)
+    }
 }
 
 fn ret<E: std::fmt::Debug, T>(res: Result<T, E>) -> Result<T, c_int> {
@@ -276,8 +283,11 @@ impl Filesystem for RFS {
         // let indirect_inode = ret(self.get_inode(indirect_block_id))?;
         // prv!(indirect_inode);
 
-        let block_id = inode_root.i_block[0];
+        let block_id = inode_root.i_block[0] as usize;
         prv!(block_id);
+
+        let data_block = ret(self.get_data_block(block_id))?;
+        prv!(data_block);
 
         println!("Init done.");
         Ok(())
