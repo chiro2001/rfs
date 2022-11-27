@@ -428,7 +428,7 @@ impl Filesystem for RFS {
         prv!("readdir", ino, offset);
         let ino = RFS::shift_ino(ino);
         rep!(reply, dirs, self.get_dirs(ino));
-        for (i, d) in dirs.iter().enumerate() {
+        for (i, d) in dirs.iter().enumerate().skip(offset as usize) {
             rep!(reply, inode, self.get_inode(d.inode as usize));
             reply.add(d.inode as u64, (i + 1) as i64, inode.to_attr(d.inode as usize).kind, d.get_name());
         }
