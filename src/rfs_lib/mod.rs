@@ -1,11 +1,13 @@
 use std::ffi::OsStr;
 use std::mem::size_of;
 use std::process::Stdio;
-use fuse::{Filesystem, ReplyEntry, Request};
+use std::thread;
+use std::time::Duration;
+use fuse::{FileAttr, Filesystem, FileType, ReplyAttr, ReplyEntry, Request};
 pub use disk_driver;
 use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE, SeekType};
 use libc::*;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use chrono::Local;
 use execute::Execute;
 
@@ -29,6 +31,8 @@ mod ffi {
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
+
+const TTL: Duration = Duration::from_secs(1);           // 1 second
 
 pub struct RFS {
     pub driver: Box<dyn DiskDriver>,
@@ -164,6 +168,14 @@ fn ret<E: std::fmt::Debug, T>(res: Result<T, E>) -> Result<T, c_int> {
             println!("RFS Error: {:#?}", e);
             Err(1)
         }
+    }
+}
+
+fn rep<E, T, F>(reply: ReplyAttr, f: F)
+    where F: FnOnce() -> Result<T, E> {
+    match f() {
+        Ok(_) => {}
+        Err(_) => { reply.error(ENOENT) }
     }
 }
 
@@ -364,6 +376,29 @@ impl Filesystem for RFS {
     fn lookup(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEntry) {
         prv!(parent, name);
         reply.error(ENOENT);
+    }
+
+    fn getattr(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyAttr) {
+        rep(reply, move || -> Result<()> {
+            let node = self.get_inode(ino as usize)?;
+            // let attr = FileAttr{
+            //     ino,
+            //     size: 0,
+            //     blocks: 0,
+            //     atime: node.i_atime,
+            //     mtime: (),
+            //     ctime: (),
+            //     crtime: (),
+            //     kind: FileType::NamedPipe,
+            //     perm: 0,
+            //     nlink: 0,
+            //     uid: 0,
+            //     gid: 0,
+            //     rdev: 0,
+            //     flags: 0
+            // };
+            Ok(())
+        });
     }
 }
 
