@@ -18,7 +18,7 @@ use utils::deserialize_row;
 use desc::Ext2GroupDesc;
 use mem::Ext2SuperBlockMem;
 use desc::Ext2INode;
-use crate::get_offset;
+use crate::{get_offset, prv};
 
 #[cxx::bridge]
 mod ffi {
@@ -107,11 +107,22 @@ impl RFS {
     fn print_stats(self: &Self) {
         println!("fs stats: {}", self.super_block.to_string());
     }
+
+    fn get_inode(self: &mut Self, ino: usize) -> Result<Ext2INode> {
+        // inode entry is 128 bytes, how many inode in one block
+        let inode_count_one_block = self.block_size() / 128;
+        let block_number = ino / inode_count_one_block + self.get_group_desc().bg_inode_table as usize;
+        prv!(block_number);
+        let mut buf = self.create_block_vec();
+        self.seek_block(block_number)?;
+        self.read_block(&mut buf)?;
+        Ok(unsafe { deserialize_row(&buf[128 * (ino % inode_count_one_block)..]) })
+    }
 }
 
-fn rret<E: std::fmt::Debug>(res: Result<(), E>) -> Result<(), c_int> {
+fn ret<E: std::fmt::Debug, T>(res: Result<T, E>) -> Result<T, c_int> {
     match res {
-        Ok(()) => Ok(()),
+        Ok(ok) => Ok(ok),
         Err(e) => {
             println!("RFS Error: {:#?}", e);
             Err(1)
@@ -122,12 +133,12 @@ fn rret<E: std::fmt::Debug>(res: Result<(), E>) -> Result<(), c_int> {
 impl Filesystem for RFS {
     fn init(&mut self, _req: &Request<'_>) -> Result<(), c_int> {
         let file = "disk";
-        rret(self.driver.ddriver_open(file))?;
+        ret(self.driver.ddriver_open(file))?;
         // get and check size
         let mut buf = [0 as u8; 4];
-        rret(self.driver.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf))?;
+        ret(self.driver.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf))?;
         self.driver_info.consts.layout_size = u32::from_be_bytes(buf.clone());
-        rret(self.driver.ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf))?;
+        ret(self.driver.ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf))?;
         self.driver_info.consts.iounit_size = u32::from_be_bytes(buf.clone());
         // at lease 32 blocks
         println!("Disk {} has {} IO blocks.", file, self.driver_info.consts.disk_block_count());
@@ -141,12 +152,12 @@ impl Filesystem for RFS {
         let disk_block_size = self.disk_block_size();
         println!("super block size {} disk block ({} bytes)", super_blk_count, super_blk_count * self.disk_block_size());
         let mut data_blocks_head = [0 as u8].repeat((disk_block_size * super_blk_count) as usize);
-        rret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
+        ret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
         let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_blocks_head) };
         if !super_block.magic_matched() {
             // maybe there is one block reserved for boot,
             // read one block again
-            rret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
+            ret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
             // data_blocks_head.reverse();
             super_block = unsafe { deserialize_row(&data_blocks_head) };
             if super_block.magic_matched() { self.filesystem_first_block = 1; }
@@ -183,13 +194,13 @@ impl Filesystem for RFS {
             let output = command.execute_output().unwrap();
             println!("{}", String::from_utf8(output.stdout).unwrap());
             // reload disk driver
-            rret(self.driver.ddriver_close())?;
-            rret(self.driver.ddriver_open(file))?;
-            rret(self.seek_block(0))?;
-            rret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
+            ret(self.driver.ddriver_close())?;
+            ret(self.driver.ddriver_open(file))?;
+            ret(self.seek_block(0))?;
+            ret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
             super_block = unsafe { deserialize_row(&data_blocks_head) };
             if !super_block.magic_matched() {
-                rret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
+                ret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
                 super_block = unsafe { deserialize_row(&data_blocks_head) };
             }
             if super_block.magic_matched() {
@@ -208,9 +219,9 @@ impl Filesystem for RFS {
         self.print_stats();
         // read block group desc table
         println!("first start block: {}", self.super_block.s_first_data_block);
-        rret(self.seek_block(self.super_block.s_first_data_block as usize + self.filesystem_first_block))?;
+        ret(self.seek_block(self.super_block.s_first_data_block as usize + self.filesystem_first_block))?;
         let mut data_block = self.create_block_vec();
-        rret(self.read_block(&mut data_block))?;
+        ret(self.read_block(&mut data_block))?;
         // just assert there is only one group now
         let group: Ext2GroupDesc = unsafe { deserialize_row(&data_block) };
         // println!("group desc data: {:x?}", data_block);
@@ -218,24 +229,24 @@ impl Filesystem for RFS {
         self.group_desc_table.push(group);
         let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
         println!("block bitmap at {} block", bg_block_bitmap);
-        rret(self.seek_block(bg_block_bitmap))?;
+        ret(self.seek_block(bg_block_bitmap))?;
         let mut bitmap_data_block = self.create_block_vec();
-        rret(self.read_block(&mut bitmap_data_block))?;
+        ret(self.read_block(&mut bitmap_data_block))?;
         println!("block bit map: {:?}", &bitmap_data_block[..32]);
 
         let bg_inode_bitmap = self.get_group_desc().bg_inode_bitmap as usize;
         println!("inode bitmap at {} block", bg_inode_bitmap);
-        rret(self.seek_block(bg_inode_bitmap))?;
+        ret(self.seek_block(bg_inode_bitmap))?;
         let mut bitmap_inode = self.create_block_vec();
-        rret(self.read_block(&mut bitmap_inode))?;
+        ret(self.read_block(&mut bitmap_inode))?;
         println!("inode bit map: {:?}", &bitmap_inode[..32]);
 
         let inode_table_n = 4 as usize;
         let bg_inode_table = self.get_group_desc().bg_inode_table as usize;
         println!("inode table start at {} block", bg_inode_table);
-        rret(self.seek_block(bg_inode_table))?;
+        ret(self.seek_block(bg_inode_table))?;
         let mut bg_inode_table = self.create_blocks_vec(inode_table_n);
-        rret(self.read_blocks(&mut bg_inode_table, inode_table_n))?;
+        ret(self.read_blocks(&mut bg_inode_table, inode_table_n))?;
         println!("inode table: {:?}", &bg_inode_table[..32]);
         let inode_table: Vec<Ext2INode> = (0..(bg_inode_table.len() / size_of::<Ext2INode>())).map(|index| {
             unsafe { deserialize_row(&bg_inode_table[(index * size_of::<Ext2INode>())..]) }
@@ -243,7 +254,13 @@ impl Filesystem for RFS {
         // inode_table.iter().enumerate().for_each(|it| {
         //     println!("inode[{}]: {:?}", it.0, it.1);
         // });
-        println!("first inode table is [{}+1]: {:?}", self.super_block.s_first_ino, &inode_table[self.super_block.s_first_ino as usize + 1]);
+        let inode = &inode_table[self.super_block.s_first_ino as usize + 1];
+        println!("first inode table is [{}+1]: {:?}", self.super_block.s_first_ino, inode);
+        println!("pointing to blocks: {:x?}", inode.i_block);
+        let inode = ret(self.get_inode(self.super_block.s_first_ino as usize + 1))?;
+        println!("got inode table: {:x?}", inode);
+        // println!("block [13] is {:x}, ")
+
 
         println!("size of super block struct is {}", size_of::<Ext2SuperBlock>());
         println!("size of group desc struct is {}", size_of::<Ext2GroupDesc>());

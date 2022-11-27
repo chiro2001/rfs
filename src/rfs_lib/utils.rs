@@ -143,6 +143,15 @@ macro_rules! get_offset {
     })
 }
 
+#[macro_export]
+macro_rules! prv {
+    ($e:expr) => {
+        {
+            println!("{} = {}", stringify!($e), $e);
+        }
+    };
+}
+
 #[cfg(test)]
 mod test {
     use anyhow::Result;
