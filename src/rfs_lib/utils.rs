@@ -132,3 +132,22 @@ pub unsafe fn serialize_row<T: Sized>(src: &T) -> &[u8] {
 pub unsafe fn deserialize_row<T>(src: &[u8]) -> T {
     std::ptr::read(src.as_ptr() as *const _)
 }
+
+#[cfg(test)]
+mod test {
+    use anyhow::Result;
+    use crate::utils::deserialize_row;
+
+    #[derive(Debug)]
+    struct TestStruct {
+        pub a: u32,
+        pub b: u8,
+    }
+
+    #[test]
+    fn test_deserialize_row() -> Result<()> {
+        let s: TestStruct = unsafe { deserialize_row(&vec![1, 2, 3, 4, 5]) };
+        println!("{:x?}", s);
+        Ok(())
+    }
+}

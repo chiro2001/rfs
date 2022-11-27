@@ -39,10 +39,13 @@ impl RFS {
     }
 
     fn disk_block_size(self: &mut Self) -> usize { self.driver_info.consts.iounit_size as usize }
-    // fn block_size(self: &mut Self) -> usize { self. as usize }
+
+    fn block_size(self: &mut Self) -> usize { (1 << self.super_block.s_log_block_size) as usize }
 
     fn read_disk_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
         assert_eq!(buf.len(), self.disk_block_size());
+        let sz = self.disk_block_size();
+        self.driver.ddriver_read(buf, sz)?;
         Ok(())
     }
 
@@ -82,9 +85,23 @@ impl Filesystem for RFS {
         println!("disk info: {:?}", self.driver_info);
         // read super block
         let super_blk_count = size_of::<Ext2SuperBlock>() / self.disk_block_size();
-        let mut data_blocks_head = [0 as u8].repeat((self.disk_block_size() * super_blk_count) as usize);
+        let disk_block_size = self.disk_block_size();
+        println!("super block size {} disk block ({} bytes)", super_blk_count, super_blk_count * self.disk_block_size());
+        let mut data_blocks_head = [0 as u8].repeat((disk_block_size * super_blk_count) as usize);
         result_to_int(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
         let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_blocks_head) };
+        println!("{:?}", data_blocks_head);
+        if !super_block.magic_matched() {
+            println!("read again.");
+            // maybe there is one block reserved for boot,
+            // read one block again
+            result_to_int(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
+            // data_blocks_head.reverse();
+            super_block = unsafe { deserialize_row(&data_blocks_head) };
+            println!("re-read magic: {}", super_block.s_magic);
+        }
+        println!("{:?}", data_blocks_head);
+        println!("magic read here: {:02x} {:02x}", data_blocks_head[56], data_blocks_head[57]);
         println!("read magic: {}", super_block.s_magic);
         if !super_block.magic_matched() {
             println!("FileSystem not found! creating super block...");
