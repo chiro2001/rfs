@@ -262,6 +262,11 @@ impl Filesystem for RFS {
                 return;
             };
         }
+        macro_rules! fetch_save_data {
+            ($block:expr) => {
+                rep!(reply, _r, self.read_data_block($block, &mut data_blocks[offset - base..]));
+            };
+        }
         loop {
             if offset - base >= max_read_blocks * sz || offset >= base + size as usize {
                 commit_data!();
@@ -270,7 +275,7 @@ impl Filesystem for RFS {
                 // block 0-11: direct addressing
                 let block = node.i_block[offset / sz] as usize;
                 if block == 0 { commit_data!(); }
-                rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
+                fetch_save_data!(block);
             } else {
                 macro_rules! calc_layer {
                     ($block:expr, $l:expr, $o:expr) => {
@@ -293,7 +298,7 @@ impl Filesystem for RFS {
                     let block = node.i_block[12] as usize;
                     if block == 0 { commit_data!(); }
                     let block = calc_layer!(block, 0, ((offset - threshold[0]) / 4 / sz) % block_id_capacity);
-                    rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
+                    fetch_save_data!(block);
                 } else if offset < threshold[2] {
                     // println!("layer 2");
                     // layer 2
@@ -301,7 +306,7 @@ impl Filesystem for RFS {
                     if block == 0 { commit_data!(); }
                     let block = calc_layer!(block, 0, ((offset - threshold[1]) / 4 / 4 / sz) % block_id_capacity);
                     let block = calc_layer!(block, 1, ((offset - threshold[1]) / 4 / sz) % block_id_capacity);
-                    rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
+                    fetch_save_data!(block);
                 } else if offset < threshold[3] {
                     // println!("layer 3");
                     // layer 3
@@ -310,7 +315,7 @@ impl Filesystem for RFS {
                     let block = calc_layer!(block, 0, ((offset - threshold[2]) / 4 / 4 / 4 / sz) % block_id_capacity);
                     let block = calc_layer!(block, 1, ((offset - threshold[2]) / 4 / 4 / sz) % block_id_capacity);
                     let block = calc_layer!(block, 2, ((offset - threshold[2]) / 4 / sz) % block_id_capacity);
-                    rep!(reply, _r, self.read_data_block(block, &mut data_blocks[offset - base..]));
+                    fetch_save_data!(block);
                 } else {
                     // out of index
                     println!("#ERROR");
