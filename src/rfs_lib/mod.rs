@@ -62,9 +62,22 @@ impl RFS {
         Ok(())
     }
 
+    fn write_disk_block(self: &mut Self, buf: &[u8]) -> Result<()> {
+        assert_eq!(buf.len(), self.disk_block_size());
+        let sz = self.disk_block_size();
+        self.driver.ddriver_write(buf, sz)?;
+        Ok(())
+    }
+
     fn read_disk_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
         let sz = self.disk_block_size();
         for i in 0..count { self.read_disk_block(&mut buf[(i * sz)..((i + 1) * sz)])? }
+        Ok(())
+    }
+
+    fn write_disk_blocks(self: &mut Self, buf: &[u8], count: usize) -> Result<()> {
+        let sz = self.disk_block_size();
+        for i in 0..count { self.write_disk_block(&buf[(i * sz)..((i + 1) * sz)])? }
         Ok(())
     }
 
@@ -85,6 +98,10 @@ impl RFS {
         self.read_disk_blocks(buf, self.block_disk_ratio())
     }
 
+    pub fn write_block(self: &mut Self, buf: &[u8]) -> Result<()> {
+        self.write_disk_blocks(buf, self.block_disk_ratio())
+    }
+
     #[allow(dead_code)]
     pub fn read_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
         self.read_disk_blocks(buf, self.block_disk_ratio() * count)
@@ -98,7 +115,7 @@ impl RFS {
         [0 as u8].repeat(self.block_size() * count)
     }
 
-    fn get_group_desc(self: &mut Self) -> &Ext2GroupDesc {
+    fn get_group_desc(self: &Self) -> &Ext2GroupDesc {
         self.group_desc_table.get(0).unwrap()
     }
 
@@ -106,7 +123,7 @@ impl RFS {
         info!("fs stats: {}", self.super_block.to_string());
     }
 
-    pub fn get_inode(self: &mut Self, ino: usize) -> Result<Ext2INode> {
+    fn fetch_inode_block_offset(self: &Self, ino: usize) -> Result<(usize, usize)> {
         // should ino minus 1?
         let inodes_per_block = self.block_size() / EXT2_INODE_SIZE;
         // assert only one group
@@ -115,10 +132,26 @@ impl RFS {
         let offset = (ino % inodes_per_block) * EXT2_INODE_SIZE;
         let block_number = ino / inodes_per_block + self.get_group_desc().bg_inode_table as usize;
         prv!(ino, block_number, offset / EXT2_INODE_SIZE);
+        Ok((block_number, offset))
+    }
+
+    pub fn get_inode(self: &mut Self, ino: usize) -> Result<Ext2INode> {
+        let (block_number, offset) = self.fetch_inode_block_offset(ino)?;
         let mut buf = self.create_block_vec();
         self.seek_block(block_number)?;
         self.read_block(&mut buf)?;
         Ok(unsafe { deserialize_row(&buf[offset..]) })
+    }
+
+    pub fn set_inode(self: &mut Self, ino: usize, inode: &Ext2INode) -> Result<()> {
+        let (block_number, offset) = self.fetch_inode_block_offset(ino)?;
+        let mut buf = self.create_block_vec();
+        self.seek_block(block_number)?;
+        self.read_block(&mut buf)?;
+        self.seek_block(block_number)?;
+        buf[offset..].copy_from_slice(unsafe { serialize_row(inode) });
+        self.write_block(&buf)?;
+        Ok(())
     }
 
     pub fn get_data_block(self: &mut Self, block: usize) -> Result<Vec<u8>> {
@@ -159,10 +192,12 @@ impl RFS {
         self.get_block_dir_entries(inode.i_block[0] as usize)
     }
 
+    /// reserved for compatibility
     pub fn shift_ino(ino: u64) -> usize {
         // if ino == 1 { EXT2_ROOT_INO } else { ino as usize }
         // if ino == 1 { 0 } else { ino as usize }
         // (ino + 1) as usize
+        // used for version 0
         ino as usize
     }
 }

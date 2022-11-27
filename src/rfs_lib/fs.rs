@@ -2,11 +2,12 @@ use std::ffi::OsStr;
 use std::mem::size_of;
 use std::os::raw::c_int;
 use std::process::Stdio;
+use std::time::SystemTime;
 use chrono::Local;
 use disk_driver::{IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use execute::Execute;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
-use libc::ENOENT;
+use libc::{ENOENT, input_id};
 use log::*;
 use crate::{prv, rep};
 use crate::rfs_lib::desc::{Ext2GroupDesc, Ext2INode, Ext2SuperBlock};
@@ -51,18 +52,12 @@ impl Filesystem for RFS {
         }
         if !super_block.magic_matched() {
             warn!("FileSystem not found! creating super block...");
-            // let mut group_desc = Ext2GroupDesc::default();
             super_block = Ext2SuperBlock::default();
             // set block size to 1 KiB
             super_block.s_log_block_size = 10;
             // super block use first block (when block size is 1 KiB), set group 0 start block = 1;
             // block size bigger than 2 KiB, use 0
             super_block.s_first_data_block = if self.block_size() < 2 * 0x400 { 1 } else { 0 };
-            // super_block.s_first_ino = 0 .. 11;
-            // It can be bigger than disk... why? use default values
-            // super_block.s_blocks_per_group = 8192;
-            // super_block.s_clusters_per_group = 8192;
-            // super_block.s_inodes_per_group = 1024;
             // 4 KiB / inode
             super_block.s_inodes_count = (self.disk_size() / 0x400 / 4) as u32;
             let block_count = self.disk_size() / super_block.block_size();
@@ -156,6 +151,13 @@ impl Filesystem for RFS {
         reply.attr(&TTL, &attr);
     }
 
+    fn setattr(&mut self, _req: &Request<'_>, ino: u64, mode: Option<u32>, uid: Option<u32>, gid: Option<u32>, size: Option<u64>, _atime: Option<SystemTime>, _mtime: Option<SystemTime>, _fh: Option<u64>, _crtime: Option<SystemTime>, chgtime: Option<SystemTime>, _bkuptime: Option<SystemTime>, flags: Option<u32>, reply: ReplyAttr) {
+        prv!("getattr", ino);
+        let ino = RFS::shift_ino(ino);
+        rep!(reply, node, self.get_inode(ino));
+        rep!(reply, self.set_inode(ino, &node));
+    }
+
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
         prv!("read", ino, offset, size);
         debug!("#read: offset = {:x}, size = {:x}", offset, size);
@@ -191,7 +193,7 @@ impl Filesystem for RFS {
         }
         macro_rules! fetch_save_data {
             ($block:expr) => {
-                rep!(reply, _r, self.read_data_block($block, &mut data_blocks[offset - base..]));
+                rep!(reply, self.read_data_block($block, &mut data_blocks[offset - base..]));
             };
         }
         loop {
@@ -209,7 +211,7 @@ impl Filesystem for RFS {
                         {
                             let l = $l;
                             if !data_block_index[l] != $block {
-                                rep!(reply, _r, self.read_data_block($block, &mut data_block[l]));
+                                rep!(reply, self.read_data_block($block, &mut data_block[l]));
                                 data_block_index[l] = $block;
                             }
                             let o = $o;
@@ -265,4 +267,6 @@ impl Filesystem for RFS {
         }
         reply.ok();
     }
+
+
 }

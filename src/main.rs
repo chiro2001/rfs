@@ -13,6 +13,7 @@ use nix::sys::signal;
 use mut_static::MutStatic;
 use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
+use log::*;
 use rfs::RFS;
 
 mod rfs_lib;
@@ -47,18 +48,19 @@ fn main() -> Result<()> {
     // let path_device = fs::canonicalize(device)?;
     let abspath_mountpoint = path_mountpoint.to_str().unwrap();
     // let abspath_device = path_device.to_str().unwrap();
-    println!("Device: {}", device);
+    info!("Device: {}", device);
 
     MOUNT_POINT.set(abspath_mountpoint.clone().to_string()).unwrap();
 
     macro_rules! umount {
         () => {
             {
-                println!("Unmounting {}", MOUNT_POINT.read().unwrap().clone());
+                use log::*;
+                info!("Unmounting {}", MOUNT_POINT.read().unwrap().clone());
                 let mut command = execute::command_args!("fusermount", "-u", MOUNT_POINT.read().unwrap().clone());
                 command.stdout(Stdio::piped());
                 let output = command.execute_output().unwrap();
-                println!("{}", String::from_utf8(output.stdout).unwrap());
+                info!("fusermount output: {}", String::from_utf8(output.stdout).unwrap());
             }
         };
     }

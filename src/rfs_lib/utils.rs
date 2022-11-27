@@ -174,6 +174,9 @@ macro_rules! rep {
             $n = _result.unwrap();
         }
     };
+    ($reply:expr, $r:expr) => {
+        rep!($reply, _r, $r);
+    };
 }
 
 pub fn ret<E, T>(res: Result<T, E>) -> Result<T, c_int> where E: std::fmt::Debug {
