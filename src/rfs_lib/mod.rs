@@ -55,6 +55,10 @@ impl RFS {
         for i in 0..count { self.read_disk_block(&mut buf[(i * sz)..((i + 1) * sz)])? }
         Ok(())
     }
+
+    fn print_stats(self: &Self) {
+        println!("fs stats: {}", self.super_block.to_string());
+    }
 }
 
 fn result_to_int<E: std::fmt::Debug>(res: Result<(), E>) -> Result<(), c_int> {
@@ -91,22 +95,13 @@ impl Filesystem for RFS {
         let mut data_blocks_head = [0 as u8].repeat((disk_block_size * super_blk_count) as usize);
         result_to_int(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
         let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_blocks_head) };
-        println!("{:?}", data_blocks_head);
         if !super_block.magic_matched() {
-            println!("read again.");
             // maybe there is one block reserved for boot,
             // read one block again
             result_to_int(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
             // data_blocks_head.reverse();
             super_block = unsafe { deserialize_row(&data_blocks_head) };
-            println!("re-read magic: {}", super_block.s_magic);
         }
-        println!("{:?}", data_blocks_head);
-        println!("magic read here: {:02x} {:02x}", data_blocks_head[56], data_blocks_head[57]);
-        println!("read magic: {}", super_block.s_magic);
-        println!("read super block: {:?}", super_block);
-        println!("head offset: {}", get_offset!(Ext2SuperBlock, s_inodes_count));
-        println!("magic offset: {}", get_offset!(Ext2SuperBlock, s_magic));
         if !super_block.magic_matched() {
             println!("FileSystem not found! creating super block...");
             // let mut group_desc = Ext2GroupDesc::default();
@@ -119,8 +114,12 @@ impl Filesystem for RFS {
             // super_block.s_blocks_per_group
             let block_count = self.driver_info.consts.layout_size as usize / super_block.block_size();
             println!("total {} blocks", block_count);
-            self.super_block.apply_from(&super_block);
+            // TODO: create layout
+        } else {
+            println!("FileSystem found!");
         }
+        self.super_block.apply_from(&super_block);
+        self.print_stats();
         println!("Init done.");
         Ok(())
     }
