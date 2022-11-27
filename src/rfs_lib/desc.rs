@@ -4,6 +4,7 @@
  * Define EXT2_PREALLOCATE to preallocate data blocks for expanding files
  */
 use std::mem::size_of;
+use rand::Rng;
 use crate::rfs_lib::types::{le16, le32, s16};
 
 pub const EXT2_DEFAULT_PREALLOC_BLOCKS: usize = 8;
@@ -446,66 +447,70 @@ pub struct Ext2SuperBlock {
     /*3fc*/ pub s_checksum: u32,  /* crc32c(superblock) */
 }
 
+pub fn create_uuid() -> [u8; 16] {
+    let mut rng = rand::thread_rng();
+    (0..16).map(|_| { rng.gen::<u8>() }).collect::<Vec<u8>>().try_into().unwrap()
+}
+
 impl Default for Ext2SuperBlock {
     fn default() -> Self {
         Self {
-            s_inodes_count: 0,
-            s_blocks_count: 0,
-            s_r_blocks_count: 0,
-            s_free_blocks_count: 0,
-            s_free_inodes_count: 0,
-            s_first_data_block: 0,
+            s_inodes_count: 1024,
+            s_blocks_count: 4096,
+            s_r_blocks_count: 204,
+            s_free_blocks_count: 3806,
+            s_free_inodes_count: 1013,
+            s_first_data_block: 1,
             s_log_block_size: 0,
             s_log_cluster_size: 0,
-            s_blocks_per_group: 0,
-            s_clusters_per_group: 0,
-            s_inodes_per_group: 0,
+            s_blocks_per_group: 8192,
+            s_clusters_per_group: 8192,
+            s_inodes_per_group: 1024,
             s_mtime: 0,
-            s_wtime: 0,
+            s_wtime: 1669521656,
             s_mnt_count: 0,
-            s_max_mnt_count: 0,
-            s_magic: EXT2_SUPER_MAGIC,
-            // s_magic: 0,
-            s_state: 0,
-            s_errors: 0,
+            s_max_mnt_count: 65535,
+            s_magic: 61267,
+            s_state: 1,
+            s_errors: 1,
             s_minor_rev_level: 0,
-            s_lastcheck: 0,
+            s_lastcheck: 1669521656,
             s_checkinterval: 0,
             s_creator_os: 0,
-            s_rev_level: 0,
+            s_rev_level: 1,
             s_def_resuid: 0,
             s_def_resgid: 0,
-            s_first_ino: 0,
-            s_inode_size: 0,
+            s_first_ino: 11,
+            s_inode_size: 256,
             s_block_group_nr: 0,
-            s_feature_compat: 0,
-            s_feature_incompat: 0,
-            s_feature_ro_compat: 0,
-            s_uuid: [0; 16],
-            s_volume_name: [0; 16],
+            s_feature_compat: 56,
+            s_feature_incompat: 2,
+            s_feature_ro_compat: 3,
+            s_uuid: create_uuid(),
+            s_volume_name: [0; EXT2_LABEL_LEN],
             s_last_mounted: [0; 64],
             s_algorithm_usage_bitmap: 0,
             s_prealloc_blocks: 0,
             s_prealloc_dir_blocks: 0,
-            s_reserved_gdt_blocks: 0,
+            s_reserved_gdt_blocks: 15,
             s_journal_uuid: [0; 16],
             s_journal_inum: 0,
             s_journal_dev: 0,
             s_last_orphan: 0,
-            s_hash_seed: [0; 4],
-            s_def_hash_version: 0,
+            s_hash_seed: [3087838277, 2185897224, 2377460875, 2234914617],
+            s_def_hash_version: 1,
             s_jnl_backup_type: 0,
             s_desc_size: 0,
-            s_default_mount_opts: 0,
+            s_default_mount_opts: 12,
             s_first_meta_bg: 0,
-            s_mkfs_time: 0,
+            s_mkfs_time: 1669521656,
             s_jnl_blocks: [0; 17],
             s_blocks_count_hi: 0,
             s_r_blocks_count_hi: 0,
             s_free_blocks_hi: 0,
-            s_min_extra_isize: 0,
-            s_want_extra_isize: 0,
-            s_flags: 0,
+            s_min_extra_isize: 32,
+            s_want_extra_isize: 32,
+            s_flags: 1,
             s_raid_stride: 0,
             s_mmp_update_interval: 0,
             s_mmp_block: 0,
@@ -533,7 +538,7 @@ impl Default for Ext2SuperBlock {
             s_mount_opts: [0; 64],
             s_usr_quota_inum: 0,
             s_grp_quota_inum: 0,
-            s_overhead_clusters: 0,
+            s_overhead_clusters: 276,
             s_backup_bgs: [0; 2],
             s_encrypt_algos: [0; 4],
             s_encrypt_pw_salt: [0; 16],
@@ -551,7 +556,7 @@ impl Default for Ext2SuperBlock {
             s_encoding: 0,
             s_encoding_flags: 0,
             s_reserved: [0; 95],
-            s_checksum: 0
+            s_checksum: 0,
         }
     }
 }

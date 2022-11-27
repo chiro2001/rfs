@@ -20,6 +20,8 @@ nix = "0.25.0"
 retry = "2.0.0"
 disk_driver = { path = "disk_driver" }
 macro_tools = { path = "src/macro_tools" }
+rand = "0.8.5"
+chrono = "0.4.23"
 
 [lib]
 crate-type = ["staticlib", "rlib"]

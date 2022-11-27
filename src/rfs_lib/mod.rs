@@ -4,6 +4,7 @@ pub use disk_driver;
 use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use libc::c_int;
 use anyhow::Result;
+use chrono::Local;
 
 pub mod utils;
 pub mod desc;
@@ -41,7 +42,9 @@ impl RFS {
 
     fn disk_block_size(self: &mut Self) -> usize { self.driver_info.consts.iounit_size as usize }
 
-    fn block_size(self: &mut Self) -> usize { (1 << self.super_block.s_log_block_size) as usize }
+    fn disk_size(self: &mut Self) -> usize { self.driver_info.consts.layout_size as usize }
+
+    fn block_size(self: &mut Self) -> usize { (1 << self.super_block.s_log_block_size) * 0x400 as usize }
 
     fn read_disk_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
         assert_eq!(buf.len(), self.disk_block_size());
@@ -83,7 +86,7 @@ impl Filesystem for RFS {
         self.driver_info.consts.iounit_size = u32::from_be_bytes(buf.clone());
         // at lease 32 blocks
         println!("Disk {} has {} IO blocks.", file, self.driver_info.consts.disk_block_count());
-        if self.driver_info.consts.layout_size < 32 * 0x400 {
+        if self.disk_size() < 32 * 0x400 {
             println!("Too small disk!");
             return Err(1);
         }
@@ -108,15 +111,29 @@ impl Filesystem for RFS {
             super_block = Ext2SuperBlock::default();
             // set block size to 1 KiB
             super_block.s_log_block_size = 10;
-            // super block use first block (when block size is 1 KiB), set group 0 start block = 1
-            super_block.s_first_data_block = 1;
-            super_block.s_first_ino = 0;
-            // super_block.s_blocks_per_group
-            let block_count = self.driver_info.consts.layout_size as usize / super_block.block_size();
+            // super block use first block (when block size is 1 KiB), set group 0 start block = 1;
+            // block size bigger than 2 KiB, use 0
+            super_block.s_first_data_block = if self.block_size() < 2 * 0x400 { 1 } else { 0 };
+            // super_block.s_first_ino = 0 .. 11;
+            // It can be bigger than disk... why? use default values
+            // super_block.s_blocks_per_group = 8192;
+            // super_block.s_clusters_per_group = 8192;
+            // super_block.s_inodes_per_group = 1024;
+            // 4 KiB / inode
+            super_block.s_inodes_count = (self.disk_size() / 0x400 / 4) as u32;
+            let block_count = self.disk_size() / super_block.block_size();
+            super_block.s_blocks_count = block_count as u32;
+            super_block.s_free_inodes_count = super_block.s_inodes_count;
+            super_block.s_free_blocks_count = super_block.s_blocks_count;
+
+            // timestamps
+            let dt = Local::now();
+            super_block.s_wtime = dt.timestamp_millis() as u32;
             println!("total {} blocks", block_count);
             // TODO: create layout
         } else {
             println!("FileSystem found!");
+            println!("fs: {:?}", super_block);
         }
         self.super_block.apply_from(&super_block);
         // println!("s_log_block_size = {}", super_block.s_log_block_size);
