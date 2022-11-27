@@ -1,8 +1,8 @@
 use macro_tools::*;
 use crate::rfs_lib::Ext2SuperBlock;
 
-#[derive(apply_mem, Default)]
-#[apply_mem_to(Ext2SuperBlock)]
+#[derive(ApplyMem, Default)]
+#[ApplyMemTo(Ext2SuperBlock)]
 pub struct Ext2SuperBlockMem {
     /* Inodes count */
     pub s_inodes_count: u32,

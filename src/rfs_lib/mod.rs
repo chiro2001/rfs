@@ -91,7 +91,8 @@ impl Filesystem for RFS {
             let mut group_desc = Ext2GroupDesc::default();
             super_block = Ext2SuperBlock::default();
             self.super_block = Ext2SuperBlockMem::default();
-            self.super_block.apply_mem(&mut super_block);
+            self.super_block.apply_to(&mut super_block);
+            self.super_block.apply_from(&super_block);
         }
         println!("Init done.");
         Ok(())
