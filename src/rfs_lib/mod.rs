@@ -109,6 +109,7 @@ impl RFS {
         let inodes_per_block = self.block_size() / EXT2_INODE_SIZE;
         // assert only one group
         // let block_group = (ino - 1) / inodes_per_block;
+        let ino = if ino <= 1 { ino } else { ino - 1 };
         let offset = (ino % inodes_per_block) * EXT2_INODE_SIZE;
         let block_number = ino / inodes_per_block + self.get_group_desc().bg_inode_table as usize;
         prv!(ino, block_number, offset / EXT2_INODE_SIZE);
