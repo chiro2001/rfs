@@ -720,7 +720,7 @@ impl Ext2DirEntry {
         String::from_utf8_lossy(&self.name[..self.name_len as usize]).to_string()
     }
     pub fn to_string(self: &Self) -> String {
-        format!("{} {} size {} name size {}", self.inode,
+        format!("{} {} entry size {} name size {}", self.inode,
                 self.get_name(), self.rec_len, self.name_len)
     }
 }
