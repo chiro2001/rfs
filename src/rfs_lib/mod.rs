@@ -35,7 +35,7 @@ pub struct RFS {
     pub driver_info: DiskInfo,
     pub super_block: Ext2SuperBlockMem,
     pub group_desc_table: Vec<Ext2GroupDesc>,
-    // ext2 may has boot reserved 1 block prefix, but not in used
+    // ext2 may has boot reserved 1 block prefix
     pub filesystem_first_block: usize,
 }
 
@@ -79,7 +79,7 @@ impl RFS {
     fn block_disk_ratio(self: &Self) -> usize { self.block_size() / self.disk_block_size() }
 
     fn seek_block(self: &mut Self, index: usize) -> Result<()> {
-        self.seek_disk_block(index * self.block_disk_ratio())
+        self.seek_disk_block((index + self.filesystem_first_block) * self.block_disk_ratio())
     }
 
     fn read_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
@@ -207,6 +207,7 @@ impl Filesystem for RFS {
         rret(self.read_block(&mut data_block))?;
         // just assert there is only one group now
         let group: Ext2GroupDesc = unsafe { deserialize_row(&data_block) };
+        println!("group desc data: {:x?}", data_block);
         println!("group: {:?}", group);
         self.group_desc_table.push(group);
         let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
@@ -221,6 +222,13 @@ impl Filesystem for RFS {
         let mut bitmap_inode = self.create_block_vec();
         rret(self.read_block(&mut bitmap_inode))?;
         println!("inode bit map: {:?}", &bitmap_inode[..32]);
+
+        let bg_inode_table = self.get_group_desc().bg_inode_table as usize;
+        println!("inode table start at {} block", bg_inode_table);
+        rret(self.seek_block(bg_inode_table))?;
+        let mut bg_inode_table = self.create_block_vec();
+        rret(self.read_block(&mut bg_inode_table))?;
+        println!("inode table: {:?}", &bg_inode_table[..32]);
         println!("Init done.");
         Ok(())
     }

@@ -150,6 +150,7 @@ mod test {
     use crate::utils::deserialize_row;
 
     #[derive(Debug)]
+    #[repr(C, align(8))]
     struct TestStruct {
         pub a: u32,
         pub b: u8,
