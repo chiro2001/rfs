@@ -1,6 +1,5 @@
-use std::ffi::OsStr;
 use std::mem::size_of;
-use fuse::{Filesystem, ReplyEntry, Request};
+use fuse::{Filesystem, Request};
 pub use disk_driver;
 use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use libc::c_int;
@@ -34,6 +33,7 @@ pub struct RFS {
 }
 
 impl RFS {
+    #[allow(dead_code)]
     pub fn new(driver: Box<dyn DiskDriver>) -> Self {
         Self { driver, driver_info: Default::default(), super_block: Default::default() }
     }
@@ -87,11 +87,17 @@ impl Filesystem for RFS {
         let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_blocks_head) };
         println!("read magic: {}", super_block.s_magic);
         if !super_block.magic_matched() {
-            println!("fs not found! creating super block...");
-            let mut group_desc = Ext2GroupDesc::default();
+            println!("FileSystem not found! creating super block...");
+            // let mut group_desc = Ext2GroupDesc::default();
             super_block = Ext2SuperBlock::default();
-            self.super_block = Ext2SuperBlockMem::default();
-            self.super_block.apply_to(&mut super_block);
+            // set block size to 1 KiB
+            super_block.s_log_block_size = 10;
+            // super block use first block (when block size is 1 KiB), set group 0 start block = 1
+            super_block.s_first_data_block = 1;
+            super_block.s_first_ino = 0;
+            // super_block.s_blocks_per_group
+            let block_count = self.driver_info.consts.layout_size as usize / super_block.block_size();
+            println!("total {} blocks", block_count);
             self.super_block.apply_from(&super_block);
         }
         println!("Init done.");

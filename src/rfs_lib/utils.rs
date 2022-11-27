@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 extern crate core;
 
 use core::mem::{align_of, forget, size_of};

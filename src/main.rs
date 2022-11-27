@@ -2,13 +2,12 @@ use std::ffi::OsStr;
 use std::fs;
 use std::process::Stdio;
 use clap::{arg, ArgAction, command};
-use crate::hello::HelloFS;
+// use crate::hello::HelloFS;
 use anyhow::{anyhow, Result};
 use disk_driver::file::FileDiskDriver;
 use execute::Execute;
 use fork::{Fork, fork};
 use lazy_static::lazy_static;
-use libc::sysinfo;
 use nix::sys::signal;
 use mut_static::MutStatic;
 use retry::delay::Fixed;
@@ -30,7 +29,7 @@ fn main() -> Result<()> {
         .arg(arg!(-f --front "Keep daemon running in front").action(ArgAction::SetTrue)
             .required(false))
         .arg(
-            arg!(--device <FILE> "Device path (filesystem storage file)")
+            arg!(-d --device <FILE> "Device path (filesystem storage file)")
                 .required(false)
                 .default_value("ddriver"),
         )

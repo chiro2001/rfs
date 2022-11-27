@@ -80,6 +80,7 @@ pub const IOC_REQ_DEVICE_IO_SZ: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('
 pub mod memory;
 pub mod file;
 
+#[allow(dead_code)]
 fn driver_tester(driver: &mut dyn DiskDriver) -> Result<()> {
     driver.ddriver_open("/home/chiro/ddriver")?;
     let mut buf = [0; size_of::<u32>()];

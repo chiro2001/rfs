@@ -1,11 +1,9 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
+use quote::quote;
 use syn;
 use syn::*;
-use syn::__private::Span;
-use syn::parse_macro_input::ParseMacroInput;
 use syn::spanned::Spanned;
 
 #[proc_macro_derive(ApplyMem, attributes(ApplyMemTo))]
@@ -14,7 +12,6 @@ pub fn apply_mem_derive(input: TokenStream) -> TokenStream {
     let attr = &ast.attrs[0];
     let target = attr.tokens.to_string();
     let target = &target.as_str()[1..(target.len() - 1)];
-    let tokens = attr.into_token_stream();
     let fields_punct = match ast.data {
         Data::Struct(DataStruct {
                          fields: Fields::Named(fields),

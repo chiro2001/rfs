@@ -553,6 +553,7 @@ impl Default for Ext2SuperBlock {
 
 impl Ext2SuperBlock {
     pub fn magic_matched(self: &Self) -> bool { self.s_magic == EXT2_SUPER_MAGIC }
+    pub fn block_size(self: &Self) -> usize { 1 << self.s_log_block_size }
 }
 
 /*
