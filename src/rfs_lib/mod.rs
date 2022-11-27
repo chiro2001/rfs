@@ -120,6 +120,7 @@ impl RFS {
         // let block_group = (ino - 1) / inodes_per_block;
         let offset = (ino % inodes_per_block) * EXT2_INODE_SIZE;
         let block_number = ino / inodes_per_block + self.get_group_desc().bg_inode_table as usize;
+        prv!(ino);
         prv!(block_number);
         let mut buf = self.create_block_vec();
         self.seek_block(block_number)?;
@@ -134,30 +135,31 @@ impl RFS {
         Ok(buf)
     }
 
-    pub fn get_block_dirs(self: &mut Self, block: usize) -> Result<Vec<Ext2DirEntry>> {
+    pub fn get_block_dir_entries(self: &mut Self, block: usize) -> Result<Vec<Ext2DirEntry>> {
         let data_block = self.get_data_block(block)?;
         let mut p = 0;
         let mut dirs = vec![];
         while p <= data_block.len() {
             let dir: Ext2DirEntry = unsafe { deserialize_row(&data_block[p..]) };
-            if dir.name_len == 0 { break; }
-            // println!("[p {:x}] name_len = {}", p, dir.name_len);
+            if dir.inode == 0 || dir.inode >= self.super_block.s_inodes_count { break; }
+            println!("[p {:x}] name_len = {}", p, dir.name_len);
             // align p to word
             p += EXT2_DIR_ENTRY_BASE_SIZE + dir.name_len as usize;
             let inc = p & 0x3;
             p &= !0x3;
             if inc != 0 { p += 0x4; }
-            // println!("next p: {:x}", p);
+            println!("next p: {:x}; dir: {}", p, dir.to_string());
             dirs.push(dir);
         }
+        println!("last dir entry: {:?}", dirs.last().unwrap());
         Ok(dirs)
     }
 
-    pub fn get_dirs(self: &mut Self, ino: usize) -> Result<Vec<Ext2DirEntry>> {
+    pub fn get_dir_entries(self: &mut Self, ino: usize) -> Result<Vec<Ext2DirEntry>> {
         let inode = self.get_inode(ino)?;
         prv!(inode);
         // TODO: walk all blocks, including indirect blocks
-        self.get_block_dirs(inode.i_block[0] as usize)
+        self.get_block_dir_entries(inode.i_block[0] as usize)
     }
 
     pub fn shift_ino(ino: u64) -> usize {
@@ -390,12 +392,13 @@ impl Filesystem for RFS {
     fn lookup(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEntry) {
         prv!("lookup", parent, name);
         let parent = RFS::shift_ino(parent);
-        rep!(reply, dirs, self.get_dirs(parent));
-        for d in dirs {
+        rep!(reply, entries, self.get_dir_entries(parent));
+        for d in entries {
             if d.get_name() == name.to_str().unwrap() {
                 match self.get_inode(d.inode as usize) {
                     Ok(r) => {
                         let attr = r.to_attr(d.inode as usize);
+                        println!("file {} == {} found! attr: {:?}", name.to_str().unwrap(), d.get_name(), attr);
                         reply.entry(&TTL, &attr, 0);
                         return;
                     }
@@ -427,9 +430,10 @@ impl Filesystem for RFS {
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
         prv!("readdir", ino, offset);
         let ino = RFS::shift_ino(ino);
-        rep!(reply, dirs, self.get_dirs(ino));
-        for (i, d) in dirs.iter().enumerate().skip(offset as usize) {
+        rep!(reply, entries, self.get_dir_entries(ino));
+        for (i, d) in entries.iter().enumerate().skip(offset as usize) {
             rep!(reply, inode, self.get_inode(d.inode as usize));
+            println!("entry {}", d.to_string());
             reply.add(d.inode as u64, (i + 1) as i64, inode.to_attr(d.inode as usize).kind, d.get_name());
         }
         reply.ok();

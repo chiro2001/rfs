@@ -702,6 +702,7 @@ pub const EXT2_FEATURE_RO_COMPAT_SUPP: usize =
 pub const EXT2_NAME_LEN: usize = 255;
 
 #[derive(Debug)]
+#[repr(C, align(4))]
 pub struct Ext2DirEntry {
     pub inode: u32,              /* Inode number */
     pub rec_len: u16,            /* Directory entry length */
@@ -719,7 +720,7 @@ impl Ext2DirEntry {
         String::from_utf8_lossy(&self.name[..self.name_len as usize]).to_string()
     }
     pub fn to_string(self: &Self) -> String {
-        format!("DIR {} {} size {} name size {}", self.inode,
+        format!("{} {} size {} name size {}", self.inode,
                 self.get_name(), self.rec_len, self.name_len)
     }
 }
