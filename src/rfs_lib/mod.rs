@@ -240,9 +240,10 @@ impl Filesystem for RFS {
         let inode_table: Vec<Ext2INode> = (0..(bg_inode_table.len() / size_of::<Ext2INode>())).map(|index| {
             unsafe { deserialize_row(&bg_inode_table[(index * size_of::<Ext2INode>())..]) }
         }).collect();
-        inode_table.iter().enumerate().for_each(|it| {
-            println!("inode[{}]: {:?}", it.0, it.1);
-        });
+        // inode_table.iter().enumerate().for_each(|it| {
+        //     println!("inode[{}]: {:?}", it.0, it.1);
+        // });
+        println!("first inode table is [{}+1]: {:?}", self.super_block.s_first_ino, &inode_table[self.super_block.s_first_ino as usize + 1]);
 
         println!("size of super block struct is {}", size_of::<Ext2SuperBlock>());
         println!("size of group desc struct is {}", size_of::<Ext2GroupDesc>());

@@ -16,6 +16,9 @@ pub struct Ext2SuperBlockMem {
     pub s_first_data_block: u32,
     /* Block size */
     pub s_log_block_size: u32,
+
+    /* First non-reserved inode */
+    pub s_first_ino: u32,
 }
 
 impl Ext2SuperBlockMem {
