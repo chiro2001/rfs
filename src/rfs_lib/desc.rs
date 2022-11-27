@@ -184,6 +184,7 @@ pub const EXT2_RESERVED_FL: usize = 0x80000000         /* reserved for ext2 lib 
 pub const EXT2_FL_USER_VISIBLE: usize = 0x604BDFFF    /* User visible flags */;
 pub const EXT2_FL_USER_MODIFIABLE: usize = 0x604B80FF /* User modifiable flags */;
 
+#[derive(Debug)]
 #[repr(C, align(8))]
 pub struct Ext2INode {
     /*00*/ pub i_mode: u16,  /* File mode */

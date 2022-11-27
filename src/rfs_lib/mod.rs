@@ -17,6 +17,7 @@ use desc::Ext2SuperBlock;
 use utils::deserialize_row;
 use desc::Ext2GroupDesc;
 use mem::Ext2SuperBlockMem;
+use desc::Ext2INode;
 use crate::get_offset;
 
 #[cxx::bridge]
@@ -93,6 +94,10 @@ impl RFS {
 
     fn create_block_vec(self: &Self) -> Vec<u8> {
         [0 as u8].repeat(self.block_size())
+    }
+
+    fn create_blocks_vec(self: &Self, count: usize) -> Vec<u8> {
+        [0 as u8].repeat(self.block_size() * count)
     }
 
     fn get_group_desc(self: &mut Self) -> &Ext2GroupDesc {
@@ -225,12 +230,23 @@ impl Filesystem for RFS {
         rret(self.read_block(&mut bitmap_inode))?;
         println!("inode bit map: {:?}", &bitmap_inode[..32]);
 
+        let inode_table_n = 4 as usize;
         let bg_inode_table = self.get_group_desc().bg_inode_table as usize;
         println!("inode table start at {} block", bg_inode_table);
         rret(self.seek_block(bg_inode_table))?;
-        let mut bg_inode_table = self.create_block_vec();
-        rret(self.read_block(&mut bg_inode_table))?;
+        let mut bg_inode_table = self.create_blocks_vec(inode_table_n);
+        rret(self.read_blocks(&mut bg_inode_table, inode_table_n))?;
         println!("inode table: {:?}", &bg_inode_table[..32]);
+        let inode_table: Vec<Ext2INode> = (0..(bg_inode_table.len() / size_of::<Ext2INode>())).map(|index| {
+            unsafe { deserialize_row(&bg_inode_table[(index * size_of::<Ext2INode>())..]) }
+        }).collect();
+        inode_table.iter().enumerate().for_each(|it| {
+            println!("inode[{}]: {:?}", it.0, it.1);
+        });
+
+        println!("size of super block struct is {}", size_of::<Ext2SuperBlock>());
+        println!("size of group desc struct is {}", size_of::<Ext2GroupDesc>());
+        println!("size of inode struct is {}", size_of::<Ext2INode>());
         println!("Init done.");
         Ok(())
     }
