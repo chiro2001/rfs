@@ -218,7 +218,7 @@ pub struct Ext2INode {
 pub const EXT2_INODE_SIZE: usize = size_of::<Ext2INode>();
 
 pub fn utc_time(timestamp_mills: u32) -> SystemTime {
-    let naive = NaiveDateTime::from_timestamp_millis(timestamp_mills as i64).unwrap();
+    let naive = NaiveDateTime::from_timestamp_millis(timestamp_mills as i64 * 1000).unwrap();
     let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
     SystemTime::from(datetime)
 }
