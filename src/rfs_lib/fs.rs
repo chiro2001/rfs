@@ -28,16 +28,16 @@ impl Filesystem for RFS {
         debug!("size of inode struct is {}", size_of::<Ext2INode>());
 
         // at lease 32 blocks
-        debug!("Disk {} has {} IO blocks.", file, self.driver_info.consts.disk_block_count());
+        info!("Disk {} has {} IO blocks.", file, self.driver_info.consts.disk_block_count());
         if self.disk_size() < 32 * 0x400 {
-            debug!("Too small disk!");
+            error!("Too small disk!");
             return Err(1);
         }
-        debug!("disk info: {:?}", self.driver_info);
+        info!("disk info: {:?}", self.driver_info);
         // read super block
         let super_blk_count = size_of::<Ext2SuperBlock>() / self.disk_block_size();
         let disk_block_size = self.disk_block_size();
-        debug!("super block size {} disk block ({} bytes)", super_blk_count, super_blk_count * self.disk_block_size());
+        info!("super block size {} disk block ({} bytes)", super_blk_count, super_blk_count * self.disk_block_size());
         let mut data_blocks_head = [0 as u8].repeat((disk_block_size * super_blk_count) as usize);
         ret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
         let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_blocks_head) };
@@ -50,7 +50,7 @@ impl Filesystem for RFS {
             if super_block.magic_matched() { self.filesystem_first_block = 1; }
         }
         if !super_block.magic_matched() {
-            debug!("FileSystem not found! creating super block...");
+            warn!("FileSystem not found! creating super block...");
             // let mut group_desc = Ext2GroupDesc::default();
             super_block = Ext2SuperBlock::default();
             // set block size to 1 KiB
@@ -73,7 +73,7 @@ impl Filesystem for RFS {
             // timestamps
             let dt = Local::now();
             super_block.s_wtime = dt.timestamp_millis() as u32;
-            debug!("total {} blocks", block_count);
+            info!("total {} blocks", block_count);
             // TODO: create layout
             // let's use mkfs.ext2
             // use version 0
@@ -93,17 +93,16 @@ impl Filesystem for RFS {
             }
             if super_block.magic_matched() {
                 self.filesystem_first_block = 1;
-                debug!("Disk driver reloaded.");
+                info!("Disk driver reloaded.");
             } else {
-                debug!("Make filesystem failed!");
+                error!("Make filesystem failed!");
                 return Err(1);
             }
         } else {
-            debug!("FileSystem found!");
+            info!("FileSystem found!");
             debug!("fs: {:x?}", super_block);
         }
         self.super_block.apply_from(&super_block);
-        // debug!("s_log_block_size = {}", super_block.s_log_block_size);
         self.print_stats();
         // read block group desc table
         debug!("first start block: {}", self.super_block.s_first_data_block);
@@ -115,79 +114,6 @@ impl Filesystem for RFS {
         // debug!("group desc data: {:x?}", data_block);
         debug!("group: {:x?}", group);
         self.group_desc_table.push(group);
-        // let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
-
-        // debug!("block bitmap at {} block", bg_block_bitmap);
-        // ret(self.seek_block(bg_block_bitmap))?;
-        // let mut bitmap_data_block = self.create_block_vec();
-        // ret(self.read_block(&mut bitmap_data_block))?;
-        // debug!("block bit map: {:?}", &bitmap_data_block[..32]);
-        //
-        // let bg_inode_bitmap = self.get_group_desc().bg_inode_bitmap as usize;
-        // debug!("inode bitmap at {} block", bg_inode_bitmap);
-        // ret(self.seek_block(bg_inode_bitmap))?;
-        // let mut bitmap_inode = self.create_block_vec();
-        // ret(self.read_block(&mut bitmap_inode))?;
-        // debug!("inode bit map: {:?}", &bitmap_inode[..32]);
-        //
-        // let inode_table_n = 4 as usize;
-        // let bg_inode_table = self.get_group_desc().bg_inode_table as usize;
-        // debug!("inode table start at {} block", bg_inode_table);
-        // ret(self.seek_block(bg_inode_table))?;
-        // let mut bg_inode_table = self.create_blocks_vec(inode_table_n);
-        // ret(self.read_blocks(&mut bg_inode_table, inode_table_n))?;
-        // debug!("inode table: {:?}", &bg_inode_table[..32]);
-        // let inode_table: Vec<Ext2INode> = (0..(bg_inode_table.len() / size_of::<Ext2INode>())).map(|index| {
-        //     unsafe { deserialize_row(&bg_inode_table[(index * size_of::<Ext2INode>())..]) }
-        // }).collect();
-        // let inode = &inode_table[self.super_block.s_first_ino as usize + 1];
-        // debug!("first inode table is [{}+1]: {:?}", self.super_block.s_first_ino, inode);
-        // debug!("pointing to blocks: {:x?}", inode.i_block);
-        // let inode = ret(self.get_inode(self.super_block.s_first_ino as usize + 1))?;
-        // debug!("got inode table: {:x?}", inode);
-        // // debug!("block [13] is {:x}, ")
-        //
-        // let inode_root = ret(self.get_inode(EXT2_ROOT_INO))?;
-        // prv!(inode_root);
-        //
-        // let block_id = inode_root.i_block[0] as usize;
-        // prv!(block_id);
-        //
-        // let data_block = ret(self.get_data_block(block_id))?;
-        // prv!(&data_block[..64]);
-        //
-        // prv!(EXT2_DIR_ENTRY_BASE_SIZE);
-        // prv!(size_of::<char>());
-        // let mut p = 0;
-        // let mut dirs = vec![];
-        // while p <= data_block.len() {
-        //     let dir: Ext2DirEntry = unsafe { deserialize_row(&data_block[p..]) };
-        //     if dir.name_len == 0 { break; }
-        //     debug!("[p {:x}] name_len = {}", p, dir.name_len);
-        //     // align p to word
-        //     p += EXT2_DIR_ENTRY_BASE_SIZE + dir.name_len as usize;
-        //     let inc = p & 0x3;
-        //     p &= !0x3;
-        //     if inc != 0 { p += 0x4; }
-        //     debug!("next p: {:x}", p);
-        //     // debug!("dir {:?}", dir);
-        //     dirs.push(dir);
-        // }
-        //
-        // for d in dirs {
-        //     debug!("dir {}", d.to_string());
-        // }
-        //
-        // let dirs = ret(self.get_dirs(EXT2_ROOT_INO))?;
-        // for d in &dirs {
-        //     debug!("ROOT/{}", d.to_string());
-        // }
-        // let dir = &dirs[2];
-        // prv!(dir);
-        // let dirs2 = ret(self.get_dirs(dir.inode as usize))?;
-        // for d in &dirs2 {
-        //     debug!("{}/{}", dir.get_name(), d.to_string());
-        // }
 
         debug!("Init done.");
         Ok(())
