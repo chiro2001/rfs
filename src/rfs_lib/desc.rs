@@ -4,6 +4,9 @@
  * Define EXT2_PREALLOCATE to preallocate data blocks for expanding files
  */
 use std::mem::size_of;
+use std::time::{SystemTime, UNIX_EPOCH};
+use chrono::{DateTime, NaiveDateTime};
+use fuse::{FileAttr, FileType};
 use rand::Rng;
 use crate::rfs_lib::types::{le16, le32, s16};
 
@@ -213,6 +216,43 @@ pub struct Ext2INode {
 }
 
 pub const EXT2_INODE_SIZE: usize = size_of::<Ext2INode>();
+
+pub fn utc_time(timestamp_mills: u32) -> SystemTime {
+    SystemTime::from(DateTime::from_utc(NaiveDateTime::from_timestamp_millis(self.i_atime as i64).unwrap(), 0))
+}
+
+impl Ext2INode {
+    pub fn to_attr(self: &Self, ino: usize) -> FileAttr {
+        FileAttr {
+            ino: ino as u64,
+            size: self.i_size as u64,
+            blocks: self.i_blocks as u64,
+            atime: utc_time(self.i_atime),
+            mtime: utc_time(self.i_mtime),
+            ctime: utc_time(self.i_ctime),
+            // Time of creation (macOS only)
+            crtime: UNIX_EPOCH,
+            // high 4 bits: file format
+            kind: match self.i_mode >> 12 {
+                0x1 => FileType::NamedPipe,
+                0x2 => FileType::CharDevice,
+                0x4 => FileType::Directory,
+                0x6 => FileType::BlockDevice,
+                0xa => FileType::Symlink,
+                0xc => FileType::Socket,
+                // Default to regular file, which is 0x8
+                _ => FileType::RegularFile,
+            },
+            // low 12 bits: use/group and access rights
+            perm: self.i_mode & 0xFFF,
+            nlink: self.i_links_count as u32,
+            uid: self.i_uid as u32 + (self.i_uid_high as u32) << 16,
+            gid: self.i_gid as u32 + (self.i_uid_high as u32) << 16,
+            rdev: 0,
+            flags: 0
+        }
+    }
+}
 
 impl Default for Ext2INode {
     fn default() -> Self {
