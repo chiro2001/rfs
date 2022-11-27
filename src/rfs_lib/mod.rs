@@ -151,10 +151,10 @@ impl RFS {
     }
 
     pub fn shift_ino(ino: u64) -> usize {
-        if ino == 1 { EXT2_ROOT_INO } else { ino as usize }
+        // if ino == 1 { EXT2_ROOT_INO } else { ino as usize }
         // if ino == 1 { 0 } else { ino as usize }
         // (ino + 1) as usize
-        // ino as usize
+        ino as usize
     }
 }
 

@@ -75,7 +75,8 @@ impl Filesystem for RFS {
             println!("total {} blocks", block_count);
             // TODO: create layout
             // let's use mkfs.ext2
-            let mut command = execute::command_args!("mkfs.ext2", file);
+            // use version 0
+            let mut command = execute::command_args!("mkfs.ext2", file, "-t", "ext2", "-r", "0");
             command.stdout(Stdio::piped());
             let output = command.execute_output().unwrap();
             println!("{}", String::from_utf8(output.stdout).unwrap());
