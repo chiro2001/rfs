@@ -150,6 +150,25 @@ macro_rules! prv {
             println!("{} = {:?}", stringify!($e), $e);
         }
     };
+    ($($e:expr),*) => {
+        {
+            $(prv!($e);)*
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! prvi {
+    ($e:expr) => {
+        {
+            println!("{} = {}", stringify!($e), $e);
+        }
+    };
+    ($($e:expr),*) => {
+        {
+            $(prvi!($e);)*
+        }
+    }
 }
 
 #[cfg(test)]

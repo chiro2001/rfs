@@ -1,9 +1,10 @@
+use std::ffi::OsStr;
 use std::mem::size_of;
 use std::process::Stdio;
-use fuse::{Filesystem, Request};
+use fuse::{Filesystem, ReplyEntry, Request};
 pub use disk_driver;
 use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE, SeekType};
-use libc::c_int;
+use libc::*;
 use anyhow::Result;
 use chrono::Local;
 use execute::Execute;
@@ -13,7 +14,7 @@ pub mod desc;
 pub mod types;
 pub mod mem;
 
-use crate::{get_offset, prv};
+use crate::{get_offset, prv, prvi};
 use utils::*;
 use mem::*;
 use desc::*;
@@ -358,6 +359,11 @@ impl Filesystem for RFS {
 
     fn destroy(&mut self, _req: &Request<'_>) {
         self.driver.ddriver_close().unwrap();
+    }
+
+    fn lookup(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEntry) {
+        prv!(parent, name);
+        reply.error(ENOENT);
     }
 }
 
