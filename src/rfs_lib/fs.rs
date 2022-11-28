@@ -290,7 +290,7 @@ impl Filesystem for RFS {
             rep!(reply, self.read_block(&mut data[(i * sz)..right]));
         }
         rep!(reply, last_data, String::from_utf8(Vec::from(&data[data.len()-16..])));
-        debug!("last 16 byte: {}", last_data);
+        // debug!("last 16 byte: {}", last_data);
         reply.data(&data);
     }
 
