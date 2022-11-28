@@ -1,4 +1,3 @@
-use core::panicking::panic;
 /// Filesystem logics
 use std::time::Duration;
 pub use disk_driver;
@@ -132,11 +131,12 @@ impl RFS {
     }
 
     /// Create a Vec<u8> in block size
-    pub fn create_block_vec(self: &Self) -> Vec<u8> {
+    pub fn create_block_vec(self: &mut Self) -> Vec<u8> {
         [0 as u8].repeat(self.block_size())
     }
 
     /// Create a Vec<u8> in multi-blocks size
+    #[allow(dead_code)]
     pub fn create_blocks_vec(self: &Self, count: usize) -> Vec<u8> {
         [0 as u8].repeat(self.block_size() * count)
     }
@@ -238,12 +238,9 @@ impl RFS {
         }
     }
 
-    pub fn walk_blocks<F>(self: &mut Self, layer: usize, start_block: usize, block_index: usize, f: &F) -> Result<bool>
-        where F: Fn(usize) -> Result<bool> {
+    pub fn walk_blocks<F>(self: &mut Self, layer: usize, start_block: usize, block_index: usize, mut f: F) -> Result<bool>
+        where F: FnMut(usize, usize) -> Result<bool> {
         if start_block == 0 { return Ok(false); }
-        if layer == 0 {
-            return Ok(f(start_block)?);
-        }
         let layer_size = self.block_size() / 4;
         let layer_size_mask = layer_size - 1;
         let mut data_block = self.create_block_vec();
@@ -253,24 +250,28 @@ impl RFS {
             let o = ((i - self.threshold(layer - 1)) >> (2 * (layer - 1))) & layer_size_mask;
             buf_u32.copy_from_slice(&data_block[o..o + 4]);
             let block = u32::from_be_bytes(buf_u32.clone()) as usize;
-            self.walk_blocks(layer - 1, block, i, f)?;
+            if layer != 1 {
+                if !self.walk_blocks(layer - 1, block, i, &mut f)? { return Ok(false); };
+            } else {
+                return Ok(f(block, i)?);
+            }
         }
         Ok(true)
     }
 
-    pub fn walk_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: F) -> Result<()>
-        where F: Fn(usize) -> Result<bool> {
+    pub fn walk_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, mut f: F) -> Result<()>
+        where F: FnMut(usize, usize) -> Result<bool> {
         let inode = self.get_inode(ino)?;
         if block_index < self.threshold(0) {
             for i in block_index..self.threshold(0) {
-                if inode.i_block[i] == 0 || !f(inode.i_block[i] as usize)? { return Ok(()); }
+                if inode.i_block[i] == 0 || !f(inode.i_block[i] as usize, i)? { return Ok(()); }
             }
         } else if block_index < self.threshold(1) {
-            self.walk_blocks(1, inode.i_block[12] as usize, block_index, &f)?;
+            self.walk_blocks(1, inode.i_block[12] as usize, block_index, f)?;
         } else if block_index < self.threshold(2) {
-            self.walk_blocks(2, inode.i_block[13] as usize, block_index, &f)?;
+            self.walk_blocks(2, inode.i_block[13] as usize, block_index, f)?;
         } else if block_index < self.threshold(3) {
-            self.walk_blocks(3, inode.i_block[14] as usize, block_index, &f)?;
+            self.walk_blocks(3, inode.i_block[14] as usize, block_index, f)?;
         } else {
             return Err(anyhow!("Too big block_index!"));
         }

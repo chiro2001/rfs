@@ -5,6 +5,7 @@ use std::os::raw::c_int;
 use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::Local;
+use cxx::m;
 use disk_driver::{IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use execute::Execute;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
@@ -212,99 +213,122 @@ impl Filesystem for RFS {
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
         prv!("read", ino, offset, size);
         debug!("#read: offset = {:x}, size = {:x}", offset, size);
-        let mut offset = offset as usize;
-        let ino = RFS::shift_ino(ino);
-        rep!(reply, node, self.get_inode(ino));
-        // debug!("to read block lists: {:x?}", node.i_block);
-        let layer = self.block_size() / 4;
-        let layer_layer = layer * layer;
-        let layer2 = layer * 2;
-        let sz = self.block_size();
+        let offset = offset as usize;
         let size = size as usize;
-        let block_id_capacity = sz / 4;
-        assert_eq!(offset % sz, 0);
-        assert_eq!(size % sz, 0);
-        let max_read_blocks = size / sz;
-        let mut data_blocks = self.create_blocks_vec(max_read_blocks);
-        let mut data_block = vec![self.create_block_vec(); 3];
-        let mut data_block_index = [usize::MAX as usize; 3];
-        let mut buf_u32 = [0 as u8; 4];
-        let base = offset;
-        let threshold: [usize; 4] = [
-            sz * 12,
-            sz * (12 + layer),
-            sz * (12 + layer + layer_layer),
-            sz * (11 + layer + layer2 + layer_layer)];
-        macro_rules! commit_data {
-            () => {
-                debug!("#commit {} KiB data", (offset - base) / 0x400);
-                reply.data(&data_blocks[..offset - base]);
-                return;
-            };
+        let sz = self.block_size();
+        let ino = RFS::shift_ino(ino);
+
+        let mut blocks: Vec<usize> = vec![];
+
+        rep!(reply, self.walk_blocks_inode(ino, offset / self.block_size(), |block, index| {
+            println!("walk to block {} index {}", block, index);
+            // let mut data_block = [0 as u8].repeat(sz);
+            // self.read_block(&mut data_block);
+            // self.driver.ddriver_read(&mut data_block, 2);
+            // reply.data(&data_block);
+            // reply.data(&[0 as u8; 32]);
+            // data.push(vec![0 as u8; 32]);
+            blocks.push(block);
+            Ok(index * sz < size)
+        }));
+        let mut data: Vec<u8> = [0 as u8].repeat(size);
+        for (i, block) in blocks.iter().enumerate() {
+            rep!(reply, self.seek_block(*block));
+            rep!(reply, self.read_block(&mut data[(i * sz)..((i + 1) * sz)]));
         }
-        macro_rules! fetch_save_data {
-            ($block:expr) => {
-                rep!(reply, self.read_data_block($block, &mut data_blocks[offset - base..]));
-            };
-        }
-        loop {
-            if offset - base >= max_read_blocks * sz || offset >= base + size as usize {
-                commit_data!();
-            }
-            if offset < threshold[0] {
-                // block 0-11: direct addressing
-                let block = node.i_block[offset / sz] as usize;
-                if block == 0 { commit_data!(); }
-                fetch_save_data!(block);
-            } else {
-                macro_rules! calc_layer {
-                    ($block:expr, $l:expr, $o:expr) => {
-                        {
-                            let l = $l;
-                            if !data_block_index[l] != $block {
-                                rep!(reply, self.read_data_block($block, &mut data_block[l]));
-                                data_block_index[l] = $block;
-                            }
-                            let o = $o;
-                            buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
-                            let block = u32::from_be_bytes(buf_u32.clone()) as usize;
-                            block
-                        }
-                    };
-                }
-                if offset < threshold[1] {
-                    // debug!("layer 1, offset = {:x}, size = {:x}", offset, size);
-                    // layer 1
-                    let block = node.i_block[12] as usize;
-                    if block == 0 { commit_data!(); }
-                    let block = calc_layer!(block, 0, ((offset - threshold[0]) / 4 / sz) % block_id_capacity);
-                    fetch_save_data!(block);
-                } else if offset < threshold[2] {
-                    // debug!("layer 2");
-                    // layer 2
-                    let block = node.i_block[13] as usize;
-                    if block == 0 { commit_data!(); }
-                    let block = calc_layer!(block, 0, ((offset - threshold[1]) / 4 / 4 / sz) % block_id_capacity);
-                    let block = calc_layer!(block, 1, ((offset - threshold[1]) / 4 / sz) % block_id_capacity);
-                    fetch_save_data!(block);
-                } else if offset < threshold[3] {
-                    // debug!("layer 3");
-                    // layer 3
-                    let block = node.i_block[13] as usize;
-                    if block == 0 { commit_data!(); }
-                    let block = calc_layer!(block, 0, ((offset - threshold[2]) / 4 / 4 / 4 / sz) % block_id_capacity);
-                    let block = calc_layer!(block, 1, ((offset - threshold[2]) / 4 / 4 / sz) % block_id_capacity);
-                    let block = calc_layer!(block, 2, ((offset - threshold[2]) / 4 / sz) % block_id_capacity);
-                    fetch_save_data!(block);
-                } else {
-                    // out of index
-                    debug!("#ERROR");
-                    reply.error(ENOENT);
-                    return;
-                }
-            }
-            offset += sz;
-        }
+        reply.data(&data);
+
+        // rep!(reply, node, self.get_inode(ino));
+        // // debug!("to read block lists: {:x?}", node.i_block);
+        // let layer = self.block_size() / 4;
+        // let layer_layer = layer * layer;
+        // let layer2 = layer * 2;
+        // let sz = self.block_size();
+        // let size = size as usize;
+        // let block_id_capacity = sz / 4;
+        // assert_eq!(offset % sz, 0);
+        // assert_eq!(size % sz, 0);
+        // let max_read_blocks = size / sz;
+        // let mut data_blocks = self.create_blocks_vec(max_read_blocks);
+        // let mut data_block = vec![self.create_block_vec(); 3];
+        // let mut data_block_index = [usize::MAX as usize; 3];
+        // let mut buf_u32 = [0 as u8; 4];
+        // let base = offset;
+        // let threshold: [usize; 4] = [
+        //     sz * 12,
+        //     sz * (12 + layer),
+        //     sz * (12 + layer + layer_layer),
+        //     sz * (11 + layer + layer2 + layer_layer)];
+        // macro_rules! commit_data {
+        //     () => {
+        //         debug!("#commit {} KiB data", (offset - base) / 0x400);
+        //         reply.data(&data_blocks[..offset - base]);
+        //         return;
+        //     };
+        // }
+        // macro_rules! fetch_save_data {
+        //     ($block:expr) => {
+        //         rep!(reply, self.read_data_block($block, &mut data_blocks[offset - base..]));
+        //     };
+        // }
+        // loop {
+        //     if offset - base >= max_read_blocks * sz || offset >= base + size as usize {
+        //         commit_data!();
+        //     }
+        //     if offset < threshold[0] {
+        //         // block 0-11: direct addressing
+        //         let block = node.i_block[offset / sz] as usize;
+        //         if block == 0 { commit_data!(); }
+        //         fetch_save_data!(block);
+        //     } else {
+        //         macro_rules! calc_layer {
+        //             ($block:expr, $l:expr, $o:expr) => {
+        //                 {
+        //                     let l = $l;
+        //                     if !data_block_index[l] != $block {
+        //                         rep!(reply, self.read_data_block($block, &mut data_block[l]));
+        //                         data_block_index[l] = $block;
+        //                     }
+        //                     let o = $o;
+        //                     buf_u32.copy_from_slice(&data_block[l][o..o + 4]);
+        //                     let block = u32::from_be_bytes(buf_u32.clone()) as usize;
+        //                     block
+        //                 }
+        //             };
+        //         }
+        //         if offset < threshold[1] {
+        //             // debug!("layer 1, offset = {:x}, size = {:x}", offset, size);
+        //             // layer 1
+        //             let block = node.i_block[12] as usize;
+        //             if block == 0 { commit_data!(); }
+        //             let block = calc_layer!(block, 0, ((offset - threshold[0]) / 4 / sz) % block_id_capacity);
+        //             fetch_save_data!(block);
+        //         } else if offset < threshold[2] {
+        //             // debug!("layer 2");
+        //             // layer 2
+        //             let block = node.i_block[13] as usize;
+        //             if block == 0 { commit_data!(); }
+        //             let block = calc_layer!(block, 0, ((offset - threshold[1]) / 4 / 4 / sz) % block_id_capacity);
+        //             let block = calc_layer!(block, 1, ((offset - threshold[1]) / 4 / sz) % block_id_capacity);
+        //             fetch_save_data!(block);
+        //         } else if offset < threshold[3] {
+        //             // debug!("layer 3");
+        //             // layer 3
+        //             let block = node.i_block[13] as usize;
+        //             if block == 0 { commit_data!(); }
+        //             let block = calc_layer!(block, 0, ((offset - threshold[2]) / 4 / 4 / 4 / sz) % block_id_capacity);
+        //             let block = calc_layer!(block, 1, ((offset - threshold[2]) / 4 / 4 / sz) % block_id_capacity);
+        //             let block = calc_layer!(block, 2, ((offset - threshold[2]) / 4 / sz) % block_id_capacity);
+        //             fetch_save_data!(block);
+        //         } else {
+        //             // out of index
+        //             debug!("#ERROR");
+        //             reply.error(ENOENT);
+        //             return;
+        //         }
+        //     }
+        //     offset += sz;
+        // }
     }
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
