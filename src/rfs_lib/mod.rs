@@ -53,7 +53,7 @@ impl RFS {
             group_desc_table: vec![],
             filesystem_first_block: 0,
             bitmap_inode: vec![],
-            bitmap_data: vec![]
+            bitmap_data: vec![],
         }
     }
 
@@ -294,6 +294,24 @@ impl RFS {
         // (ino + 1) as usize
         // used for version 0
         ino as usize
+    }
+
+    pub fn bitmap_search(bitmap: &Vec<u8>) -> Result<usize> {
+        for (i, byte) in bitmap.iter().enumerate() {
+            let b = *byte;
+            for j in 0..8 {
+                if (b >> i) & 0x1 == 0 {
+                    // found free bit, return
+                    return Ok(i * 8 + j);
+                }
+            }
+        };
+        Err(anyhow!("Bitmap full!"))
+    }
+
+    pub fn bitmap_set(bitmap: &mut Vec<u8>, index: usize) {
+        let b = bitmap[index / 8] | (1 << (index % 8));
+        bitmap[index / 8] = b;
     }
 }
 

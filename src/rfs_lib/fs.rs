@@ -229,8 +229,9 @@ impl Filesystem for RFS {
     }
 
     fn mknod(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _rdev: u32, reply: ReplyEntry) {
-        rep!(reply, inode, self.get_inode(parent as usize));
+        rep!(reply, inode_parent, self.get_inode(parent as usize));
         // search inode bitmap for free inode
+        rep!(reply, free, Self::bitmap_search(&self.bitmap_inode));
 
     }
 
