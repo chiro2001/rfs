@@ -395,9 +395,9 @@ impl RFS {
             // debug!("buf: {:x?}, block: {:x}", buf_u32, block);
             if !f(block, i)? { return Ok(()); }
         }
-        warn!("L2");
+        // warn!("L2");
         // 13 -> L2
-        let round_down = |x: usize| ((x - 12) / layer_size) * layer_size + 12;
+        // let round_down = |x: usize| ((x - 12) / layer_size) * layer_size + 12;
         // for i in range_step(max(block_index, self.threshold(1)), self.threshold(2), layer_size) {
         // for i in range_step(max(round_down(block_index), self.threshold(1)), self.threshold(2), layer_size) {
         for i in range_step(self.threshold(1), self.threshold(2), layer_size) {
@@ -406,7 +406,7 @@ impl RFS {
                 self.read_data_block(block_number, &mut layer_data[0])?;
                 layer_index[0] = block_number;
             }
-            let offset = ((i - self.threshold(0)) << 2) / layer_size;
+            let offset = ((i - self.threshold(1)) << 2) / layer_size;
             buf_u32.copy_from_slice(&layer_data[0][offset..offset + 4]);
             let block = u32::from_le_bytes(buf_u32.clone()) as usize;
 
@@ -418,7 +418,7 @@ impl RFS {
                     layer_index[1] = block_number;
                 }
                 // let offset = ((j - self.threshold(0)) << 2) / layer_size;
-                let offset = ((j - self.threshold(0)) << 2) % layer_size;
+                let offset = ((j - 12) % layer_size) << 2;
                 // if offset == 0 && j - self.threshold(0) != 0 {
                 //     panic!("OFFSET OVERFLOW! i={:x}, j={:x}", i, j);
                 // }
@@ -428,6 +428,8 @@ impl RFS {
                 if !f(block, j)? { return Ok(()); }
             }
         }
+        // 14 -> L3
+        panic!("L3");
         Ok(())
     }
 

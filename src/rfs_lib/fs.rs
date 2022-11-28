@@ -265,6 +265,9 @@ impl Filesystem for RFS {
             blocks.push(block);
             debug!("walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
                 block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
+            if block == 0 {
+                panic!("zero block!");
+            }
             if block * sz > disk_size {
                 panic!("error block number {:x}!", block);
             }
@@ -286,6 +289,8 @@ impl Filesystem for RFS {
             let right = min((i + 1) * sz, size);
             rep!(reply, self.read_block(&mut data[(i * sz)..right]));
         }
+        rep!(reply, last_data, String::from_utf8(Vec::from(&data[data.len()-16..])));
+        debug!("last 16 byte: {}", last_data);
         reply.data(&data);
     }
 
