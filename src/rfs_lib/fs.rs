@@ -258,7 +258,7 @@ impl Filesystem for RFS {
         rep!(reply, self.walk_blocks_inode(ino, offset / self.block_size(), &mut |block, index| {
             debug!("walk to block {} index {}", block, index);
             blocks.push(block);
-            Ok(index * sz < size)
+            Ok((index + 1) * sz < size)
         }));
         let mut data: Vec<u8> = [0 as u8].repeat(size);
         for (i, block) in blocks.iter().enumerate() {
