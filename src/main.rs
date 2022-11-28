@@ -21,6 +21,7 @@ mod hello;
 // mod utils;
 
 lazy_static! {
+    /// Store static mount point argument for signal call use
     pub static ref MOUNT_POINT: MutStatic<String> = MutStatic::new();
 }
 

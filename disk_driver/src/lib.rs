@@ -63,12 +63,19 @@ impl SeekType {
 
 /// DiskDriver abstract interface
 pub trait DiskDriver {
+    /// Open file
     fn ddriver_open(self: &mut Self, path: &str) -> Result<()>;
+    /// Close file
     fn ddriver_close(self: &mut Self) -> Result<()>;
+    /// Move cursor
     fn ddriver_seek(self: &mut Self, offset: i64, whence: SeekType) -> Result<u64>;
+    /// Write data to disk. Smallest unit is disk block.
     fn ddriver_write(self: &mut Self, buf: &[u8], size: usize) -> Result<usize>;
+    /// Read data from disk. Smallest unit is disk block.
     fn ddriver_read(self: &mut Self, buf: &mut [u8], size: usize) -> Result<usize>;
+    /// Read disk info, including disk size, disk unit and stats
     fn ddriver_ioctl(self: &mut Self, cmd: u32, arg: &mut [u8]) -> Result<()>;
+    /// Reset cursor, fill super block
     fn ddriver_reset(self: &mut Self) -> Result<()>;
 }
 

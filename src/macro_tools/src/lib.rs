@@ -6,6 +6,16 @@ use syn;
 use syn::*;
 use syn::spanned::Spanned;
 
+/// Add funtion `apply_to` and `apply_from`.
+/// This struct should have part of feilds in a "parent" struct.
+///
+/// ## apply_to
+///
+/// Dump data from this struct to "parent".
+///
+/// ## apply_from
+///
+/// Copy data from "parent" to this struct.
 #[proc_macro_derive(ApplyMem, attributes(ApplyMemTo))]
 pub fn apply_mem_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);

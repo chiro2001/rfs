@@ -127,14 +127,19 @@ impl<T> SliceExt for [T] {
     }
 }
 
+/// Unsafe data cast
+/// struct => &[u8]
 pub unsafe fn serialize_row<T: Sized>(src: &T) -> &[u8] {
     from_raw_parts((src as *const T) as *const u8, size_of::<T>())
 }
 
+/// Unsafe data cast
+/// &[u8] => struct
 pub unsafe fn deserialize_row<T>(src: &[u8]) -> T {
     std::ptr::read(src.as_ptr() as *const _)
 }
 
+/// Get filed offset from it's struct
 #[macro_export]
 macro_rules! get_offset {
     ($type:ty, $field:tt) => ({
@@ -145,6 +150,7 @@ macro_rules! get_offset {
     })
 }
 
+/// Print variable name and it's value
 #[macro_export]
 macro_rules! prv {
     ($e:expr) => {
@@ -162,6 +168,8 @@ macro_rules! prv {
     }
 }
 
+/// Get Result<()>'s Ok(data)
+/// When errors, call reply.error() and return;
 #[macro_export]
 macro_rules! rep {
     ($reply:expr, $n:ident, $r:expr) => {
@@ -179,6 +187,8 @@ macro_rules! rep {
     };
 }
 
+/// Get Result<()>'s Ok(data) as mutable
+/// When errors, call reply.error() and return;
 #[macro_export]
 macro_rules! rep_mut {
     ($reply:expr, $n:ident, $r:expr) => {
@@ -196,6 +206,7 @@ macro_rules! rep_mut {
     };
 }
 
+/// Convert Result<T, E> to Result<T, c_int>
 pub fn ret<E, T>(res: Result<T, E>) -> Result<T, c_int> where E: std::fmt::Debug {
     match res {
         Ok(ok) => Ok(ok),
@@ -206,6 +217,7 @@ pub fn ret<E, T>(res: Result<T, E>) -> Result<T, c_int> where E: std::fmt::Debug
     }
 }
 
+/// Reply* has method fn error(err), but have no trait to manage it.
 pub trait ReplyError {
     fn make_error(self: Self, err: c_int);
 }
