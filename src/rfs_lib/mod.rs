@@ -385,19 +385,41 @@ impl RFS {
         // 12 -> L1
         for i in max(block_index, self.threshold(0))..self.threshold(1) {
             let block_number = inode.i_block[12] as usize;
-            if layer_index[0] != block_index {
+            if layer_index[0] != block_number {
                 self.read_data_block(block_number, &mut layer_data[0])?;
-                layer_index[0] = block_index;
+                layer_index[0] = block_number;
             }
             let offset = (i - self.threshold(0)) << 2;
             buf_u32.copy_from_slice(&layer_data[0][offset..offset + 4]);
             let block = u32::from_le_bytes(buf_u32.clone()) as usize;
-            debug!("buf: {:x?}, block: {:x}", buf_u32, block);
+            // debug!("buf: {:x?}, block: {:x}", buf_u32, block);
             if !f(block, i)? { return Ok(()); }
         }
+        warn!("L2");
         // 13 -> L2
         for i in range_step(max(block_index, self.threshold(1)), self.threshold(2), layer_size) {
+            let block_number = inode.i_block[13] as usize;
+            if layer_index[0] != block_number {
+                self.read_data_block(block_number, &mut layer_data[0])?;
+                layer_index[0] = block_number;
+            }
+            let offset = ((i - self.threshold(0)) << 2) / layer_size;
+            buf_u32.copy_from_slice(&layer_data[0][offset..offset + 4]);
+            let block = u32::from_le_bytes(buf_u32.clone()) as usize;
 
+            for j in i..i + layer_size {
+                let block_number = block;
+                if layer_index[1] != block_number {
+                    self.read_data_block(block_number, &mut layer_data[1])?;
+                    layer_index[1] = block_number;
+                }
+                // let offset = ((j - self.threshold(0)) << 2) / layer_size;
+                let offset = ((j - self.threshold(0)) << 2) % layer_size;
+                buf_u32.copy_from_slice(&layer_data[1][offset..offset + 4]);
+                let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+
+                if !f(block, j)? { return Ok(()); }
+            }
         }
         Ok(())
     }

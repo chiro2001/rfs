@@ -273,7 +273,7 @@ impl Filesystem for RFS {
             }
             last_index = index;
             if last_block != 0 && last_block > block {
-                panic!("error block increase! index now: {}", block);
+                panic!("error block increase! block now: {}, last block: {}", block, last_block);
             }
             last_block = block;
             Ok(will_continue)
