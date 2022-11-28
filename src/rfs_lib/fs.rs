@@ -12,7 +12,8 @@ use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request
 use libc::ENOENT;
 use log::*;
 use crate::{prv, rep, rep_mut};
-use crate::rfs_lib::desc::{Ext2GroupDesc, Ext2INode, Ext2SuperBlock};
+use crate::rfs_lib::desc::EXT2_ROOT_INO;
+use crate::rfs_lib::desc::{Ext2GroupDesc, Ext2INode, Ext2SuperBlock, Ext2DirEntry};
 use crate::rfs_lib::{TTL, RFS};
 use crate::rfs_lib::utils::*;
 
@@ -130,6 +131,12 @@ impl Filesystem for RFS {
         self.bitmap_inode.clear();
         self.bitmap_inode.extend_from_slice(&bitmap_inode);
 
+        // load root dir
+        self.root_dir = ret(self.get_inode(EXT2_ROOT_INO))?;
+        debug!("root dir inode: {:?}", self.root_dir);
+
+        // let entries = ret(self.get_dir_entries())?;
+
         debug!("Init done.");
         Ok(())
     }
@@ -231,8 +238,11 @@ impl Filesystem for RFS {
     fn mknod(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _rdev: u32, reply: ReplyEntry) {
         rep!(reply, inode_parent, self.get_inode(parent as usize));
         // search inode bitmap for free inode
-        rep!(reply, free, Self::bitmap_search(&self.bitmap_inode));
-
+        rep!(reply, ino_free, Self::bitmap_search(&self.bitmap_inode));
+        Self::bitmap_set(&mut self.bitmap_inode, ino_free);
+        // create entry and inode
+        let entry = Ext2DirEntry::new_file(name.to_str().unwrap(), ino_free);
+        // let inode = Ext2INode::default()
     }
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {

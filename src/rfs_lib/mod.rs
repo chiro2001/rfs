@@ -40,6 +40,8 @@ pub struct RFS {
     /// bitmap in memory
     pub bitmap_inode: Vec<u8>,
     pub bitmap_data: Vec<u8>,
+    /// Root directory
+    pub root_dir: Ext2INode,
 }
 
 impl RFS {
@@ -54,6 +56,7 @@ impl RFS {
             filesystem_first_block: 0,
             bitmap_inode: vec![],
             bitmap_data: vec![],
+            root_dir: Default::default(),
         }
     }
 
@@ -229,6 +232,19 @@ impl RFS {
         let inode = self.get_inode(ino)?;
         prv!(inode);
         // TODO: walk all blocks, including indirect blocks
+        // let offset = offset as usize;
+        // let size = size as usize;
+        // let sz = self.block_size();
+        // let ino = RFS::shift_ino(ino);
+        //
+        // let mut blocks: Vec<usize> = vec![];
+        //
+        // rep!(reply, self.walk_blocks_inode(ino, offset / self.block_size(), &mut |block, index| {
+        //     debug!("walk to block {} index {}", block, index);
+        //     blocks.push(block);
+        //     Ok(index * sz < size)
+        // }));
+
         self.get_block_dir_entries(inode.i_block[0] as usize)
     }
 
@@ -244,7 +260,7 @@ impl RFS {
         }
     }
 
-    /// Walk on Layer
+    /// Walk on *ONE* Layer
     pub fn walk_blocks<const L: usize, F>(self: &mut Self, start_block: usize, block_index: usize, mut f: &mut F) -> Result<bool>
         where F: FnMut(usize, usize) -> Result<bool> {
         if start_block == 0 { return Ok(false); }
@@ -271,16 +287,28 @@ impl RFS {
     pub fn walk_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
         where F: FnMut(usize, usize) -> Result<bool> {
         let inode = self.get_inode(ino)?;
+        macro_rules! visit_layer {
+            ($l:expr) => {
+                if !self.walk_blocks::<$l, F>(inode.i_block[11 + $l] as usize, self.threshold($l - 1), f)? { return Ok(()); };
+            };
+        }
         if block_index < self.threshold(0) {
             for i in block_index..self.threshold(0) {
                 if inode.i_block[i] == 0 || !f(inode.i_block[i] as usize, i)? { return Ok(()); }
             }
+            // continue
+            visit_layer!(1);
+            visit_layer!(2);
+            visit_layer!(3);
         } else if block_index < self.threshold(1) {
-            self.walk_blocks::<1, F>(inode.i_block[12] as usize, block_index, f)?;
+            visit_layer!(1);
+            visit_layer!(2);
+            visit_layer!(3);
         } else if block_index < self.threshold(2) {
-            self.walk_blocks::<2, F>(inode.i_block[13] as usize, block_index, f)?;
+            visit_layer!(2);
+            visit_layer!(3);
         } else if block_index < self.threshold(3) {
-            self.walk_blocks::<3, F>(inode.i_block[14] as usize, block_index, f)?;
+            visit_layer!(3);
         } else {
             return Err(anyhow!("Too big block_index!"));
         }

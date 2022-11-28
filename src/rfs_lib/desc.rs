@@ -258,7 +258,7 @@ pub const EXT2_FL_USER_MODIFIABLE: usize = 0x604B80FF ;
 #[derive(Debug)]
 #[repr(C, align(2))]
 pub struct Ext2INode {
-    /*00*/ ///   File mode 
+    /*00*/ ///   File mode
     pub i_mode: u16,
     ///   Low 16 bits of Owner Uid 
     pub i_uid: u16,
@@ -944,6 +944,24 @@ impl Ext2DirEntry {
         format!("{} {} entry size {} name size {}", self.inode,
                 self.get_name(), self.rec_len, self.name_len)
     }
+    pub fn new(name: &str, inode: usize, file_type: u8) -> Self {
+        let mut name_u8 = [0 as u8; EXT2_NAME_LEN];
+        name_u8.copy_from_slice(name.as_bytes());
+        assert!(name.len() < 256, "Too long filename!");
+        Self{
+            inode: inode as u32,
+            rec_len: (4 + 2 + 1 + 1 + name.len()) as u16,
+            name_len: name.len() as u8,
+            file_type,
+            name: name_u8
+        }
+    }
+    pub fn new_file(name: &str, inode: usize) -> Self {
+        Self::new(name, inode, EXT2_FT_REG_FILE)
+    }
+    pub fn new_dir(name: &str, inode: usize) -> Self {
+        Self::new(name, inode, EXT2_FT_DIR)
+    }
 }
 
 /**
@@ -1001,16 +1019,16 @@ struct Ext2DirEntryTail {
  * Ext2 directory file types.  Only the low 3 bits are used.  The
  * other bits are reserved for now.
  */
-pub const EXT2_FT_UNKNOWN: usize = 0;
-pub const EXT2_FT_REG_FILE: usize = 1;
-pub const EXT2_FT_DIR: usize = 2;
-pub const EXT2_FT_CHRDEV: usize = 3;
-pub const EXT2_FT_BLKDEV: usize = 4;
-pub const EXT2_FT_FIFO: usize = 5;
-pub const EXT2_FT_SOCK: usize = 6;
-pub const EXT2_FT_SYMLINK: usize = 7;
+pub const EXT2_FT_UNKNOWN: u8 = 0;
+pub const EXT2_FT_REG_FILE: u8 = 1;
+pub const EXT2_FT_DIR: u8 = 2;
+pub const EXT2_FT_CHRDEV: u8 = 3;
+pub const EXT2_FT_BLKDEV: u8 = 4;
+pub const EXT2_FT_FIFO: u8 = 5;
+pub const EXT2_FT_SOCK: u8 = 6;
+pub const EXT2_FT_SYMLINK: u8 = 7;
 
-pub const EXT2_FT_MAX: usize = 8;
+pub const EXT2_FT_MAX: u8 = 8;
 
 /**
  * Annoyingly, e2fsprogs always swab16s Ext2DirEntry.name_len, so we
