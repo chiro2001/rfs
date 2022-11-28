@@ -227,6 +227,7 @@ impl RFS {
         self.get_block_dir_entries(inode.i_block[0] as usize)
     }
 
+    /// Block index layer threshold
     pub fn threshold(self: &Self, l: usize) -> usize {
         let layer = self.block_size() / 4;
         match l {
@@ -238,6 +239,7 @@ impl RFS {
         }
     }
 
+    /// Walk on Layer
     pub fn walk_blocks<const L: usize, F>(self: &mut Self, start_block: usize, block_index: usize, mut f: &mut F) -> Result<bool>
         where F: FnMut(usize, usize) -> Result<bool> {
         if start_block == 0 { return Ok(false); }
@@ -260,7 +262,8 @@ impl RFS {
         Ok(true)
     }
 
-    pub fn walk_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, mut f: &mut F) -> Result<()>
+    /// Walk for ino
+    pub fn walk_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
         where F: FnMut(usize, usize) -> Result<bool> {
         let inode = self.get_inode(ino)?;
         if block_index < self.threshold(0) {
