@@ -112,6 +112,24 @@ impl Filesystem for RFS {
         debug!("group: {:x?}", group);
         self.group_desc_table.push(group);
 
+        let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
+        debug!("block bitmap at {} block", bg_block_bitmap);
+        ret(self.seek_block(bg_block_bitmap))?;
+        let mut bitmap_data_block = self.create_block_vec();
+        ret(self.read_block(&mut bitmap_data_block))?;
+        debug!("block bit map: {:?}", &bitmap_data_block[..32]);
+        self.bitmap_data.clear();
+        self.bitmap_data.extend_from_slice(&bitmap_data_block);
+
+        let bg_inode_bitmap = self.get_group_desc().bg_inode_bitmap as usize;
+        debug!("inode bitmap at {} block", bg_inode_bitmap);
+        ret(self.seek_block(bg_inode_bitmap))?;
+        let mut bitmap_inode = self.create_block_vec();
+        ret(self.read_block(&mut bitmap_inode))?;
+        debug!("inode bit map: {:?}", &bitmap_inode[..32]);
+        self.bitmap_inode.clear();
+        self.bitmap_inode.extend_from_slice(&bitmap_inode);
+
         debug!("Init done.");
         Ok(())
     }
@@ -158,7 +176,7 @@ impl Filesystem for RFS {
                atime: Option<SystemTime>, mtime: Option<SystemTime>, _fh: Option<u64>,
                _crtime: Option<SystemTime>, chgtime: Option<SystemTime>,
                bkuptime: Option<SystemTime>, flags: Option<u32>, reply: ReplyAttr) {
-        prv!("getattr", ino);
+        prv!("setattr", ino);
         let ino = RFS::shift_ino(ino);
         rep_mut!(reply, node, self.get_inode(ino));
         match mode {
@@ -208,6 +226,12 @@ impl Filesystem for RFS {
             _ => {}
         };
         rep!(reply, self.set_inode(ino, &node));
+    }
+
+    fn mknod(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _rdev: u32, reply: ReplyEntry) {
+        rep!(reply, inode, self.get_inode(parent as usize));
+        // search inode bitmap for free inode
+
     }
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {

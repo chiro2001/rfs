@@ -35,8 +35,11 @@ pub struct RFS {
     pub driver_info: DiskInfo,
     pub super_block: Ext2SuperBlockMem,
     pub group_desc_table: Vec<Ext2GroupDesc>,
-    // ext2 may has boot reserved 1 block prefix
+    /// ext2 may has boot reserved 1 block prefix
     pub filesystem_first_block: usize,
+    /// bitmap in memory
+    pub bitmap_inode: Vec<u8>,
+    pub bitmap_data: Vec<u8>,
 }
 
 impl RFS {
@@ -49,6 +52,8 @@ impl RFS {
             super_block: Default::default(),
             group_desc_table: vec![],
             filesystem_first_block: 0,
+            bitmap_inode: vec![],
+            bitmap_data: vec![]
         }
     }
 
