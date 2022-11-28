@@ -284,29 +284,35 @@ impl RFS {
         // m = log2(block_size / 4) = log2(layer), x / a == x >> m
         let m = self.super_block.s_log_block_size as usize + 10 - 2;
         let layer_size = self.block_size() / 4;
-        let layer_size_mask = layer_size - 1;
+        let layer_size_mask = (layer_size * 4) - 1;
         let mut data_block = self.create_block_vec();
         let mut buf_u32 = [0 as u8; 4];
         self.read_data_block(start_block, &mut data_block)?;
         // for i in block_index..(self.threshold_diff(L) + target_offset) {
         // for i in block_index..(block_index + self.threshold_diff(L)) {
-        for i in range_step(block_index, block_index + self.threshold_diff(L), 1 << (m * (s - 1))) {
+        assert_eq!(self.threshold_diff(L) / (1 << (m * (s - 1))), layer_size);
+        let entry_index_start = (block_index - 12) >> ((s - 1) * m);
+        // for i in range_step(block_index, block_index + self.threshold_diff(L), 1 << (m * (s - 1))) {
+        for i in entry_index_start..((entry_index_start + layer_size) % layer_size) {
             // let o = ((i - self.threshold(L - 1)) >> (2 * (L - 1))) & layer_size_mask;
-            let x = i - 12;
-            let o = ((x >> ((s - 1) * m)) << 2) & layer_size_mask;
+            // let x = i - 12;
+            // let o = ((x << 2) >> ((s - 1) * m)) & layer_size_mask;
             // prv!(i, m, o);
+            let o = i * 4;
             buf_u32.copy_from_slice(&data_block[o..o + 4]);
             let block = u32::from_le_bytes(buf_u32.clone()) as usize;
-            debug!("buf_u32: {:x?}, block: {:x}", buf_u32, block);
+            // debug!("buf_u32: {:x?}, block: {:x}", buf_u32, block);
             if L != 1 {
                 if L == 3 {
-                    if !self.walk_blocks::<2, F>(block, i, s + 1, &mut f)? {
+                    // if !self.walk_blocks::<2, F>(block, i, s + 1, &mut f)? {
+                    if !self.walk_blocks::<2, F>(block, (i >> ((s - 1) * m)) + 12, s + 1, &mut f)? {
                         debug!("quit <2> on i={}", i);
                         return Ok(false);
                     };
                 }
                 if L == 2 {
-                    if !self.walk_blocks::<1, F>(block, i, s + 1, &mut f)? {
+                    // if !self.walk_blocks::<1, F>(block, i, s + 1, &mut f)? {
+                    if !self.walk_blocks::<1, F>(block, (i >> ((s - 1) * m)) + 12, s + 1, &mut f)? {
                         debug!("quit <1> on i={}", i);
                         debug!("thresholds: 0={} 1={} 2={} 3={}", self.threshold(0),
                             self.threshold(1), self.threshold(2), self.threshold(3));
@@ -346,14 +352,19 @@ impl RFS {
             visit_layer!(2);
             visit_layer!(3);
         } else if block_index < self.threshold(1) {
+            // debug!("START from layer 1");
             visit_layer_from!(1, block_index);
             visit_layer!(2);
             visit_layer!(3);
         } else if block_index < self.threshold(2) {
-            visit_layer_from!(2, block_index);
+            error!("START from layer 2");
+            // visit_layer_from!(2, block_index);
+            visit_layer!(2);
             visit_layer!(3);
         } else if block_index < self.threshold(3) {
-            visit_layer_from!(3, block_index);
+            error!("START from layer 3");
+            // visit_layer_from!(3, block_index);
+            visit_layer!(3);
         } else {
             return Err(anyhow!("Too big block_index!"));
         }

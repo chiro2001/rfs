@@ -256,6 +256,8 @@ impl Filesystem for RFS {
         let start_index = offset / self.block_size();
 
         let disk_size = self.disk_size();
+        let mut last_index = 0 as usize;
+        let mut last_block = 0 as usize;
         rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
             let will_continue = (index + 1) * sz - offset < size;
             blocks.push(block);
@@ -265,6 +267,14 @@ impl Filesystem for RFS {
                 panic!("error block number {:x}!",block);
             }
             // Ok((index + 1 - start_index) * sz < size)
+            if last_index != 0 && last_index + 1 != index {
+                panic!("error index increase! index now: {}", index);
+            }
+            last_index = index;
+            if last_block != 0 && last_block > block {
+                panic!("error block increase! index now: {}", block);
+            }
+            last_block = block;
             Ok(will_continue)
         }));
         let mut data: Vec<u8> = [0 as u8].repeat(size);
