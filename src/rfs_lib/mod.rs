@@ -397,7 +397,10 @@ impl RFS {
         }
         warn!("L2");
         // 13 -> L2
-        for i in range_step(max(block_index, self.threshold(1)), self.threshold(2), layer_size) {
+        let round_down = |x: usize| ((x - 12) / layer_size) * layer_size + 12;
+        // for i in range_step(max(block_index, self.threshold(1)), self.threshold(2), layer_size) {
+        // for i in range_step(max(round_down(block_index), self.threshold(1)), self.threshold(2), layer_size) {
+        for i in range_step(self.threshold(1), self.threshold(2), layer_size) {
             let block_number = inode.i_block[13] as usize;
             if layer_index[0] != block_number {
                 self.read_data_block(block_number, &mut layer_data[0])?;
@@ -408,6 +411,7 @@ impl RFS {
             let block = u32::from_le_bytes(buf_u32.clone()) as usize;
 
             for j in i..i + layer_size {
+                if block_index > j { continue; }
                 let block_number = block;
                 if layer_index[1] != block_number {
                     self.read_data_block(block_number, &mut layer_data[1])?;
@@ -415,6 +419,9 @@ impl RFS {
                 }
                 // let offset = ((j - self.threshold(0)) << 2) / layer_size;
                 let offset = ((j - self.threshold(0)) << 2) % layer_size;
+                // if offset == 0 && j - self.threshold(0) != 0 {
+                //     panic!("OFFSET OVERFLOW! i={:x}, j={:x}", i, j);
+                // }
                 buf_u32.copy_from_slice(&layer_data[1][offset..offset + 4]);
                 let block = u32::from_le_bytes(buf_u32.clone()) as usize;
 

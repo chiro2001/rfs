@@ -254,6 +254,7 @@ impl Filesystem for RFS {
         let ino = RFS::shift_ino(ino);
         let mut blocks: Vec<usize> = vec![];
         let start_index = offset / self.block_size();
+        assert_eq!(offset % self.block_size(), 0);
 
         let disk_size = self.disk_size();
         let mut last_index = 0 as usize;
@@ -273,7 +274,7 @@ impl Filesystem for RFS {
             }
             last_index = index;
             if last_block != 0 && last_block > block {
-                panic!("error block increase! block now: {}, last block: {}", block, last_block);
+                error!("error block increase! block now: {}, last block: {}", block, last_block);
             }
             last_block = block;
             Ok(will_continue)
