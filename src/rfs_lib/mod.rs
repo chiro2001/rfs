@@ -1,7 +1,8 @@
+use core::panicking::panic;
 /// Filesystem logics
 use std::time::Duration;
 pub use disk_driver;
-use anyhow::{Result};
+use anyhow::{anyhow, Result};
 use disk_driver::{DiskDriver, DiskInfo, SeekType};
 use log::*;
 
@@ -224,6 +225,56 @@ impl RFS {
         prv!(inode);
         // TODO: walk all blocks, including indirect blocks
         self.get_block_dir_entries(inode.i_block[0] as usize)
+    }
+
+    pub fn threshold(self: &Self, l: usize) -> usize {
+        let layer = self.block_size() / 4;
+        match l {
+            0 => 12,
+            1 => 12 + layer,
+            2 => 12 + layer + layer * layer,
+            3 => 11 + layer + layer * 2 + layer * layer,
+            _ => panic!("Walk layer out of range")
+        }
+    }
+
+    pub fn walk_blocks<F>(self: &mut Self, layer: usize, start_block: usize, block_index: usize, f: &F) -> Result<bool>
+        where F: Fn(usize) -> Result<bool> {
+        if start_block == 0 { return Ok(false); }
+        if layer == 0 {
+            return Ok(f(start_block)?);
+        }
+        let layer_size = self.block_size() / 4;
+        let layer_size_mask = layer_size - 1;
+        let mut data_block = self.create_block_vec();
+        let mut buf_u32 = [0 as u8; 4];
+        self.read_data_block(start_block, &mut data_block)?;
+        for i in block_index..self.threshold(layer) {
+            let o = ((i - self.threshold(layer - 1)) >> (2 * (layer - 1))) & layer_size_mask;
+            buf_u32.copy_from_slice(&data_block[o..o + 4]);
+            let block = u32::from_be_bytes(buf_u32.clone()) as usize;
+            self.walk_blocks(layer - 1, block, i, f)?;
+        }
+        Ok(true)
+    }
+
+    pub fn walk_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: F) -> Result<()>
+        where F: Fn(usize) -> Result<bool> {
+        let inode = self.get_inode(ino)?;
+        if block_index < self.threshold(0) {
+            for i in block_index..self.threshold(0) {
+                if inode.i_block[i] == 0 || !f(inode.i_block[i] as usize)? { return Ok(()); }
+            }
+        } else if block_index < self.threshold(1) {
+            self.walk_blocks(1, inode.i_block[12] as usize, block_index, &f)?;
+        } else if block_index < self.threshold(2) {
+            self.walk_blocks(2, inode.i_block[13] as usize, block_index, &f)?;
+        } else if block_index < self.threshold(3) {
+            self.walk_blocks(3, inode.i_block[14] as usize, block_index, &f)?;
+        } else {
+            return Err(anyhow!("Too big block_index!"));
+        }
+        Ok(())
     }
 
     /// reserved for compatibility
