@@ -95,16 +95,16 @@ fn main() -> Result<()> {
     let retry_times = 3;
     match if matches.get_flag("front") { Ok(Fork::Child) } else { fork() } {
         Ok(Fork::Parent(child)) => {
-            println!("Daemon running at pid: {}", child);
+            info!("Daemon running at pid: {}", child);
             Ok(())
         }
         Ok(Fork::Child) => {
             match retry_with_index(Fixed::from_millis(100), |current_try| {
-                println!("[try {}/{}] Mount to {}", current_try, retry_times, abspath_mountpoint);
+                info!("[try {}/{}] Mount to {}", current_try, retry_times, abspath_mountpoint);
                 let res = fuse::mount(RFS::new(Box::new(FileDiskDriver::new(""))), abspath_mountpoint, &options);
                 match res {
                     Ok(_) => {
-                        println!("All Done.");
+                        info!("All Done.");
                         OperationResult::Ok(())
                     }
                     Err(e) => {
@@ -112,7 +112,7 @@ fn main() -> Result<()> {
                             OperationResult::Err(format!("Failed to mount after {} retries! Err: {}", retry_times, e))
                         } else {
                             umount!();
-                            println!("Umount Done.");
+                            info!("Umount Done.");
                             OperationResult::Retry(format!("Failed to mount, trying to umount..."))
                         }
                     }

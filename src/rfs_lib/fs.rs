@@ -5,7 +5,6 @@ use std::os::raw::c_int;
 use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::Local;
-use cxx::m;
 use disk_driver::{IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use execute::Execute;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
@@ -252,12 +251,13 @@ impl Filesystem for RFS {
         let size = size as usize;
         let sz = self.block_size();
         let ino = RFS::shift_ino(ino);
-
         let mut blocks: Vec<usize> = vec![];
+        let start_index = offset / self.block_size();
 
-        rep!(reply, self.walk_blocks_inode(ino, offset / self.block_size(), &mut |block, index| {
+        rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
             debug!("walk to block {} index {}", block, index);
             blocks.push(block);
+            // Ok((index + 1 - start_index) * sz < size)
             Ok((index + 1) * sz < size)
         }));
         let mut data: Vec<u8> = [0 as u8].repeat(size);

@@ -263,7 +263,11 @@ impl RFS {
     /// Walk on *ONE* Layer
     pub fn walk_blocks<const L: usize, F>(self: &mut Self, start_block: usize, block_index: usize, mut f: &mut F) -> Result<bool>
         where F: FnMut(usize, usize) -> Result<bool> {
-        if start_block == 0 { return Ok(false); }
+        debug!("walk_blocks<{}>(start_block={}, block_index={})", L, start_block, block_index);
+        if start_block == 0 {
+            debug!("start_block is zero!");
+            return Ok(false);
+        }
         let layer_size = self.block_size() / 4;
         let layer_size_mask = layer_size - 1;
         let mut data_block = self.create_block_vec();
@@ -274,9 +278,22 @@ impl RFS {
             buf_u32.copy_from_slice(&data_block[o..o + 4]);
             let block = u32::from_be_bytes(buf_u32.clone()) as usize;
             if L != 1 {
-                if L == 3 { if !self.walk_blocks::<2, F>(block, i, &mut f)? { return Ok(false); }; }
-                if L == 2 { if !self.walk_blocks::<1, F>(block, i, &mut f)? { return Ok(false); }; }
+                if L == 3 {
+                    if !self.walk_blocks::<2, F>(block, i, &mut f)? {
+                        debug!("quit <2> on i={}", i);
+                        return Ok(false);
+                    };
+                }
+                if L == 2 {
+                    if !self.walk_blocks::<1, F>(block, i, &mut f)? {
+                        debug!("quit <1> on i={}", i);
+                        debug!("thresholds: 0={} 1={} 2={} 3={}", self.threshold(0),
+                            self.threshold(1), self.threshold(2), self.threshold(3));
+                        return Ok(false);
+                    };
+                }
             } else {
+                debug!("call f(block={}, index={})", block, i);
                 return Ok(f(block, i)?);
             }
         }
@@ -289,7 +306,12 @@ impl RFS {
         let inode = self.get_inode(ino)?;
         macro_rules! visit_layer {
             ($l:expr) => {
-                if !self.walk_blocks::<$l, F>(inode.i_block[11 + $l] as usize, self.threshold($l - 1), f)? { return Ok(()); };
+                visit_layer_from!($l, self.threshold($l - 1));
+            };
+        }
+        macro_rules! visit_layer_from {
+            ($l:expr, $start:expr) => {
+                if !self.walk_blocks::<$l, F>(inode.i_block[11 + $l] as usize, $start, f)? { return Ok(()); };
             };
         }
         if block_index < self.threshold(0) {
@@ -301,14 +323,14 @@ impl RFS {
             visit_layer!(2);
             visit_layer!(3);
         } else if block_index < self.threshold(1) {
-            visit_layer!(1);
+            visit_layer_from!(1, block_index);
             visit_layer!(2);
             visit_layer!(3);
         } else if block_index < self.threshold(2) {
-            visit_layer!(2);
+            visit_layer_from!(2, block_index);
             visit_layer!(3);
         } else if block_index < self.threshold(3) {
-            visit_layer!(3);
+            visit_layer_from!(3, block_index);
         } else {
             return Err(anyhow!("Too big block_index!"));
         }
