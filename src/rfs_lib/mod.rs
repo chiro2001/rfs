@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::iter;
 /// Filesystem logics
 use std::time::Duration;
@@ -367,6 +368,36 @@ impl RFS {
             visit_layer!(3);
         } else {
             return Err(anyhow!("Too big block_index!"));
+        }
+        Ok(())
+    }
+
+    pub fn read_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
+        where F: FnMut(usize, usize) -> Result<bool> {
+        let inode = self.get_inode(ino)?;
+        for i in block_index..self.threshold(0) {
+            if !f(inode.i_block[i] as usize, i)? { return Ok(()); }
+        }
+        let layer_size = self.block_size() / 4;
+        let mut layer_index = [usize::MAX; 3];
+        let mut layer_data = vec![self.create_block_vec(); 3];
+        let mut buf_u32 = [0 as u8; 4];
+        // 12 -> L1
+        for i in max(block_index, self.threshold(0))..self.threshold(1) {
+            let block_number = inode.i_block[12] as usize;
+            if layer_index[0] != block_index {
+                self.read_data_block(block_number, &mut layer_data[0])?;
+                layer_index[0] = block_index;
+            }
+            let offset = (i - self.threshold(0)) << 2;
+            buf_u32.copy_from_slice(&layer_data[0][offset..offset + 4]);
+            let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+            debug!("buf: {:x?}, block: {:x}", buf_u32, block);
+            if !f(block, i)? { return Ok(()); }
+        }
+        // 13 -> L2
+        for i in range_step(max(block_index, self.threshold(1)), self.threshold(2), layer_size) {
+
         }
         Ok(())
     }

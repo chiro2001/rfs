@@ -258,13 +258,14 @@ impl Filesystem for RFS {
         let disk_size = self.disk_size();
         let mut last_index = 0 as usize;
         let mut last_block = 0 as usize;
-        rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
+        // rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
+        rep!(reply, self.read_blocks_inode(ino, start_index, &mut |block, index| {
             let will_continue = (index + 1) * sz - offset < size;
             blocks.push(block);
             debug!("walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
                 block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
             if block * sz > disk_size {
-                panic!("error block number {:x}!",block);
+                panic!("error block number {:x}!", block);
             }
             // Ok((index + 1 - start_index) * sz < size)
             if last_index != 0 && last_index + 1 != index {
