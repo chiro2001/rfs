@@ -292,9 +292,10 @@ impl RFS {
         // for i in block_index..(self.threshold_diff(L) + target_offset) {
         // for i in block_index..(block_index + self.threshold_diff(L)) {
         assert_eq!(self.threshold_diff(L) / (1 << (m * (s - 1))), layer_size);
-        let entry_index_start = (block_index - 12) >> ((s - 1) * m);
-        // for i in range_step(block_index, block_index + self.threshold_diff(L), 1 << (m * (s - 1))) {
-        for i in entry_index_start..((entry_index_start + layer_size) % layer_size) {
+        // let entry_index_start = (block_index - 12) >> ((s - 1) * m);
+        let entry_index_start = self.threshold(L - 1);
+        for i in range_step(entry_index_start, self.threshold(L + 1), 1 << (m * (s - 1))) {
+            // for i in entry_index_start..((entry_index_start + layer_size) % layer_size) {
             // let o = ((i - self.threshold(L - 1)) >> (2 * (L - 1))) & layer_size_mask;
             // let x = i - 12;
             // let o = ((x << 2) >> ((s - 1) * m)) & layer_size_mask;
@@ -344,31 +345,32 @@ impl RFS {
             };
         }
         warn!("i_blocks[12, 13, 14] = {}, {}, {}", inode.i_block[12], inode.i_block[13], inode.i_block[14]);
-        if block_index < self.threshold(0) {
-            for i in block_index..self.threshold(0) {
-                if inode.i_block[i] == 0 || !f(inode.i_block[i] as usize, i)? { return Ok(()); }
-            }
-            // continue
-            visit_layer!(1);
-            visit_layer!(2);
-            visit_layer!(3);
-        } else if block_index < self.threshold(1) {
-            // debug!("START from layer 1");
-            visit_layer_from!(1, block_index);
-            visit_layer!(2);
-            visit_layer!(3);
-        } else if block_index < self.threshold(2) {
-            error!("START from layer 2");
-            // visit_layer_from!(2, block_index);
-            visit_layer!(2);
-            visit_layer!(3);
-        } else if block_index < self.threshold(3) {
-            error!("START from layer 3");
-            // visit_layer_from!(3, block_index);
-            visit_layer!(3);
-        } else {
-            return Err(anyhow!("Too big block_index!"));
+        // if block_index < self.threshold(0) {
+        for i in block_index..self.threshold(0) {
+            if inode.i_block[i] == 0 || !f(inode.i_block[i] as usize, i)? { return Ok(()); }
         }
+        // continue
+        visit_layer!(1);
+        visit_layer!(2);
+        panic!("L3");
+        visit_layer!(3);
+        // } else if block_index < self.threshold(1) {
+        //     // debug!("START from layer 1");
+        //     visit_layer_from!(1, block_index);
+        //     visit_layer!(2);
+        //     visit_layer!(3);
+        // } else if block_index < self.threshold(2) {
+        //     error!("START from layer 2");
+        //     // visit_layer_from!(2, block_index);
+        //     visit_layer!(2);
+        //     visit_layer!(3);
+        // } else if block_index < self.threshold(3) {
+        //     error!("START from layer 3");
+        //     // visit_layer_from!(3, block_index);
+        //     visit_layer!(3);
+        // } else {
+        //     return Err(anyhow!("Too big block_index!"));
+        // }
         Ok(())
     }
 
