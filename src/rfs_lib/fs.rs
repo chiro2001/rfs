@@ -220,7 +220,7 @@ impl Filesystem for RFS {
 
         let mut blocks: Vec<usize> = vec![];
 
-        rep!(reply, self.walk_blocks_inode(ino, offset / self.block_size(), |block, index| {
+        rep!(reply, self.walk_blocks_inode(ino, offset / self.block_size(), &mut |block, index| {
             println!("walk to block {} index {}", block, index);
             // let mut data_block = [0 as u8].repeat(sz);
             // self.read_block(&mut data_block);

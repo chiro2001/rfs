@@ -238,7 +238,7 @@ impl RFS {
         }
     }
 
-    pub fn walk_blocks<F>(self: &mut Self, layer: usize, start_block: usize, block_index: usize, mut f: F) -> Result<bool>
+    pub fn walk_blocks<const L: usize, F>(self: &mut Self, start_block: usize, block_index: usize, mut f: &mut F) -> Result<bool>
         where F: FnMut(usize, usize) -> Result<bool> {
         if start_block == 0 { return Ok(false); }
         let layer_size = self.block_size() / 4;
@@ -246,12 +246,13 @@ impl RFS {
         let mut data_block = self.create_block_vec();
         let mut buf_u32 = [0 as u8; 4];
         self.read_data_block(start_block, &mut data_block)?;
-        for i in block_index..self.threshold(layer) {
-            let o = ((i - self.threshold(layer - 1)) >> (2 * (layer - 1))) & layer_size_mask;
+        for i in block_index..self.threshold(L) {
+            let o = ((i - self.threshold(L - 1)) >> (2 * (L - 1))) & layer_size_mask;
             buf_u32.copy_from_slice(&data_block[o..o + 4]);
             let block = u32::from_be_bytes(buf_u32.clone()) as usize;
-            if layer != 1 {
-                if !self.walk_blocks(layer - 1, block, i, &mut f)? { return Ok(false); };
+            if L != 1 {
+                if L == 3 { if !self.walk_blocks::<2, F>(block, i, &mut f)? { return Ok(false); }; }
+                if L == 2 { if !self.walk_blocks::<1, F>(block, i, &mut f)? { return Ok(false); }; }
             } else {
                 return Ok(f(block, i)?);
             }
@@ -259,7 +260,7 @@ impl RFS {
         Ok(true)
     }
 
-    pub fn walk_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, mut f: F) -> Result<()>
+    pub fn walk_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, mut f: &mut F) -> Result<()>
         where F: FnMut(usize, usize) -> Result<bool> {
         let inode = self.get_inode(ino)?;
         if block_index < self.threshold(0) {
@@ -267,11 +268,11 @@ impl RFS {
                 if inode.i_block[i] == 0 || !f(inode.i_block[i] as usize, i)? { return Ok(()); }
             }
         } else if block_index < self.threshold(1) {
-            self.walk_blocks(1, inode.i_block[12] as usize, block_index, f)?;
+            self.walk_blocks::<1, F>(inode.i_block[12] as usize, block_index, f)?;
         } else if block_index < self.threshold(2) {
-            self.walk_blocks(2, inode.i_block[13] as usize, block_index, f)?;
+            self.walk_blocks::<2, F>(inode.i_block[13] as usize, block_index, f)?;
         } else if block_index < self.threshold(3) {
-            self.walk_blocks(3, inode.i_block[14] as usize, block_index, f)?;
+            self.walk_blocks::<3, F>(inode.i_block[14] as usize, block_index, f)?;
         } else {
             return Err(anyhow!("Too big block_index!"));
         }
