@@ -47,6 +47,12 @@ impl DiskDriver for FileDiskDriver {
     }
 
     fn ddriver_seek(self: &mut Self, offset: i64, whence: SeekType) -> Result<u64> {
+        if whence == SeekType::Set {
+            debug!("disk seek to {:x}", offset);
+            if offset > self.info.consts.layout_size.into() {
+                panic!("SEEK OUT! size is {:x}, offset = {:x}", self.info.consts.layout_size, offset);
+            }
+        }
         Ok(self.get_file().seek(match whence {
             SeekType::Set => SeekFrom::Start(offset as u64),
             SeekType::Cur => SeekFrom::Current(offset),

@@ -1,9 +1,11 @@
+use std::iter;
 /// Filesystem logics
 use std::time::Duration;
 pub use disk_driver;
 use anyhow::{anyhow, Result};
 use disk_driver::{DiskDriver, DiskInfo, SeekType};
 use log::*;
+use num::range_step;
 
 pub mod utils;
 pub mod desc;
@@ -168,7 +170,7 @@ impl RFS {
         let ino = if ino <= 1 { ino } else { ino - 1 };
         let offset = (ino % inodes_per_block) * EXT2_INODE_SIZE;
         let block_number = ino / inodes_per_block + self.get_group_desc().bg_inode_table as usize;
-        prv!(ino, block_number, offset / EXT2_INODE_SIZE);
+        // prv!(ino, block_number, offset / EXT2_INODE_SIZE);
         Ok((block_number, offset))
     }
 
@@ -260,32 +262,51 @@ impl RFS {
         }
     }
 
+    pub fn threshold_diff(self: &Self, l: usize) -> usize {
+        let layer = self.block_size() / 4;
+        match l {
+            0 => 12,
+            1 => layer,
+            2 => layer * layer,
+            3 => layer * layer * layer,
+            _ => panic!("Walk layer out of range")
+        }
+    }
+
     /// Walk on *ONE* Layer
-    pub fn walk_blocks<const L: usize, F>(self: &mut Self, start_block: usize, block_index: usize, mut f: &mut F) -> Result<bool>
+    pub fn walk_blocks<const L: usize, F>(self: &mut Self, start_block: usize, block_index: usize, s: usize, mut f: &mut F) -> Result<bool>
         where F: FnMut(usize, usize) -> Result<bool> {
         debug!("walk_blocks<{}>(start_block={}, block_index={})", L, start_block, block_index);
         if start_block == 0 {
             debug!("start_block is zero!");
             return Ok(false);
         }
+        // m = log2(block_size / 4) = log2(layer), x / a == x >> m
+        let m = self.super_block.s_log_block_size as usize + 10 - 2;
         let layer_size = self.block_size() / 4;
         let layer_size_mask = layer_size - 1;
         let mut data_block = self.create_block_vec();
         let mut buf_u32 = [0 as u8; 4];
         self.read_data_block(start_block, &mut data_block)?;
-        for i in block_index..self.threshold(L) {
-            let o = ((i - self.threshold(L - 1)) >> (2 * (L - 1))) & layer_size_mask;
+        // for i in block_index..(self.threshold_diff(L) + target_offset) {
+        // for i in block_index..(block_index + self.threshold_diff(L)) {
+        for i in range_step(block_index, block_index + self.threshold_diff(L), 1 << (m * (s - 1))) {
+            // let o = ((i - self.threshold(L - 1)) >> (2 * (L - 1))) & layer_size_mask;
+            let x = i - 12;
+            let o = ((x >> ((s - 1) * m)) << 2) & layer_size_mask;
+            // prv!(i, m, o);
             buf_u32.copy_from_slice(&data_block[o..o + 4]);
-            let block = u32::from_be_bytes(buf_u32.clone()) as usize;
+            let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+            debug!("buf_u32: {:x?}, block: {:x}", buf_u32, block);
             if L != 1 {
                 if L == 3 {
-                    if !self.walk_blocks::<2, F>(block, i, &mut f)? {
+                    if !self.walk_blocks::<2, F>(block, i, s + 1, &mut f)? {
                         debug!("quit <2> on i={}", i);
                         return Ok(false);
                     };
                 }
                 if L == 2 {
-                    if !self.walk_blocks::<1, F>(block, i, &mut f)? {
+                    if !self.walk_blocks::<1, F>(block, i, s + 1, &mut f)? {
                         debug!("quit <1> on i={}", i);
                         debug!("thresholds: 0={} 1={} 2={} 3={}", self.threshold(0),
                             self.threshold(1), self.threshold(2), self.threshold(3));
@@ -294,7 +315,8 @@ impl RFS {
                 }
             } else {
                 debug!("call f(block={}, index={})", block, i);
-                return Ok(f(block, i)?);
+                let r = f(block, i)?;
+                if !r { return Ok(r); }
             }
         }
         Ok(true)
@@ -311,9 +333,10 @@ impl RFS {
         }
         macro_rules! visit_layer_from {
             ($l:expr, $start:expr) => {
-                if !self.walk_blocks::<$l, F>(inode.i_block[11 + $l] as usize, $start, f)? { return Ok(()); };
+                if !self.walk_blocks::<$l, F>(inode.i_block[11 + $l] as usize, $start, 1, f)? { return Ok(()); };
             };
         }
+        warn!("i_blocks[12, 13, 14] = {}, {}, {}", inode.i_block[12], inode.i_block[13], inode.i_block[14]);
         if block_index < self.threshold(0) {
             for i in block_index..self.threshold(0) {
                 if inode.i_block[i] == 0 || !f(inode.i_block[i] as usize, i)? { return Ok(()); }

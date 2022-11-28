@@ -45,6 +45,7 @@ impl Default for DiskConst {
     }
 }
 
+#[derive(PartialEq)]
 pub enum SeekType {
     Set,
     Cur,

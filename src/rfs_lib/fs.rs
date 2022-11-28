@@ -1,3 +1,4 @@
+use std::cmp::min;
 /// FUSE operations.
 use std::ffi::OsStr;
 use std::mem::size_of;
@@ -254,16 +255,24 @@ impl Filesystem for RFS {
         let mut blocks: Vec<usize> = vec![];
         let start_index = offset / self.block_size();
 
+        let disk_size = self.disk_size();
         rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
-            debug!("walk to block {} index {}", block, index);
+            let will_continue = (index + 1) * sz - offset < size;
             blocks.push(block);
+            debug!("walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
+                block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
+            if block * sz > disk_size {
+                panic!("error block number {:x}!",block);
+            }
             // Ok((index + 1 - start_index) * sz < size)
-            Ok((index + 1) * sz < size)
+            Ok(will_continue)
         }));
         let mut data: Vec<u8> = [0 as u8].repeat(size);
         for (i, block) in blocks.iter().enumerate() {
+            // if i * sz >= size { break; }
             rep!(reply, self.seek_block(*block));
-            rep!(reply, self.read_block(&mut data[(i * sz)..((i + 1) * sz)]));
+            let right = min((i + 1) * sz, size);
+            rep!(reply, self.read_block(&mut data[(i * sz)..right]));
         }
         reply.data(&data);
     }
