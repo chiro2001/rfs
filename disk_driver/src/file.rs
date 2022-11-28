@@ -6,9 +6,11 @@ use anyhow::Result;
 use log::*;
 use crate::*;
 
-// const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400;
+/// 4MiB size
+const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400;
 /// 1 GiB size
-const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400 * 0x100;
+// const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400 * 0x100;
+
 const FILE_DISK_UNIT: usize = 512;
 
 pub struct FileDiskDriver {

@@ -266,7 +266,8 @@ impl Filesystem for RFS {
             debug!("walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
                 block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
             if block == 0 {
-                panic!("zero block!");
+                warn!("zero block!");
+                // TODO: file not found
             }
             if block * sz > disk_size {
                 panic!("error block number {:x}!", block);
