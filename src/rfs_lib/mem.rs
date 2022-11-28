@@ -1,23 +1,24 @@
+/// Manage filesystem structure in memory
 use macro_tools::*;
 use crate::rfs_lib::Ext2SuperBlock;
 
 #[derive(ApplyMem, Default)]
 #[ApplyMemTo(Ext2SuperBlock)]
 pub struct Ext2SuperBlockMem {
-    /* Inodes count */
+    /// Inodes count
     pub s_inodes_count: u32,
-    /* Reserved blocks count */
+    /// Reserved blocks count
     pub s_r_blocks_count: u32,
-    /* Free blocks count */
+    /// Free blocks count
     pub s_free_blocks_count: u32,
-    /* Free inodes count */
+    /// Free inodes count
     pub s_free_inodes_count: u32,
-    /* First Data Block */
+    /// First Data Block
     pub s_first_data_block: u32,
-    /* Block size */
+    /// Block size
     pub s_log_block_size: u32,
 
-    /* First non-reserved inode */
+    /// First non-reserved inode
     pub s_first_ino: u32,
 }
 

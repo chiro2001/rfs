@@ -1,3 +1,4 @@
+/// FUSE operations.
 use std::ffi::OsStr;
 use std::mem::size_of;
 use std::os::raw::c_int;
@@ -7,7 +8,7 @@ use chrono::Local;
 use disk_driver::{IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use execute::Execute;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
-use libc::{ENOENT, input_id};
+use libc::ENOENT;
 use log::*;
 use crate::{prv, rep, rep_mut};
 use crate::rfs_lib::desc::{Ext2GroupDesc, Ext2INode, Ext2SuperBlock};
