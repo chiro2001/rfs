@@ -264,7 +264,7 @@ impl Filesystem for RFS {
         let mut offset_cnt = 0 as usize;
         for len in entries_lengths { offset_cnt += len; }
         if offset_cnt + entry.rec_len as usize >= self.block_size() {
-            info!("");
+            info!("offset overflow! old last_block_i: {}, block: {}", last_block_i, inode_parent.i_block[last_block_i]);
             // append block index and load next block
             assert_ne!(last_block_i, 11);
             last_block_i += 1;
@@ -279,19 +279,21 @@ impl Filesystem for RFS {
             for len in entries_lengths { offset_cnt += len; }
         }
         debug!("parent inode blocks: {:x?}", inode_parent.i_block);
-        // write entry to buf
+        info!("write entry to buf, rec_len = {}", entry.rec_len);
         let mut data_block = self.create_block_vec();
         rep!(reply, self.read_block(&mut data_block));
         let entry_data = unsafe { serialize_row(&entry) };
         data_block[offset_cnt..offset_cnt + entry.rec_len as usize].copy_from_slice(&entry_data[..entry.rec_len as usize]);
-        // write back buf
+        info!("write back buf block: {}", inode_parent.i_block[last_block_i]);
         rep!(reply, self.write_data_block(inode_parent.i_block[last_block_i] as usize, &data_block));
-        debug!("mknod done");
         let attr = inode.to_attr(ino_free);
         debug!("file {} == {} created! attr: {:?}", name.to_str().unwrap(), entry.get_name(), attr);
-        // write new inode
+        info!("write new inode: [{}] {:?}", ino_free, inode);
         rep!(reply, self.set_inode(ino_free, &inode));
+        info!("write parent inode: [{}] {:?}", parent, inode_parent);
+        rep!(reply, self.set_inode(parent as usize, &inode_parent));
         reply.entry(&TTL, &attr, 0);
+        debug!("mknod done");
     }
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
