@@ -587,7 +587,7 @@ impl RFS {
         let mut data_block = self.create_block_vec();
         // self.read_block(&mut data_block)?;
         self.read_data_block(inode_parent.i_block[last_block_i] as usize, &mut data_block)?;
-        warn!("original data_block:");
+        debug!("original data_block:");
         show_hex_debug(&data_block[..0x50], 0x10);
         if reset_last_rec_len {
             debug!("write back modified parent entries");
@@ -602,11 +602,11 @@ impl RFS {
             // data_block[offset_cnt - parent_entries_last_rec_len_old as usize..offset_cnt + (parent_entries_last.rec_len - parent_entries_last_rec_len_old) as usize]
             //     .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
             let offset_next = offset_start + parent_entries_last.rec_len as usize;
-            warn!("data_block update: [{:x}..{:x}]", offset_start, offset_next);
+            debug!("data_block update: [{:x}..{:x}]", offset_start, offset_next);
             data_block[offset_start..offset_next]
                 .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
             // offset_cnt = up_align(offset_cnt, 4);
-            warn!("data_block after update:");
+            debug!("data_block after update:");
             show_hex_debug(&data_block[..0x50], 0x10);
             offset_cnt = offset_next;
         }
@@ -615,9 +615,9 @@ impl RFS {
         entry.rec_len = (self.block_size() - offset_cnt) as u16;
         debug!("new entry to write: {} {:?}", entry.to_string(), entry);
         let entry_data = unsafe { serialize_row(&entry) };
-        warn!("update data_block for entry_data: [{:x}..{:x}]", offset_cnt, offset_next);
+        debug!("update data_block for entry_data: [{:x}..{:x}]", offset_cnt, offset_next);
         data_block[offset_cnt..offset_next].copy_from_slice(&entry_data[..old_rec_len as usize]);
-        warn!("data_block to write:");
+        debug!("data_block to write:");
         show_hex_debug(&data_block[..0x50], 0x10);
         debug!("write back buf block: {}", inode_parent.i_block[last_block_i]);
         self.write_data_block(inode_parent.i_block[last_block_i] as usize, &data_block)?;

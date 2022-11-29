@@ -22,7 +22,7 @@ if [[ "${TEST_METHOD}" == "E" ]]; then
 elif [[ "${TEST_METHOD}" == "N" ]]; then
     ./main.sh "4"
 elif [[ "${TEST_METHOD}" == "M" ]]; then
-    ./main.sh "1"
+    ./main.sh "2"
 else
     echo "----测试阶段1：mount测试"
     echo "----测试阶段2：增加 mkdir 和 touch 测试"
