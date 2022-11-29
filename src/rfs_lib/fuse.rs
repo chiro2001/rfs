@@ -1,13 +1,10 @@
 /// FUSE operations.
 use std::ffi::OsStr;
 use std::time::SystemTime;
-use disk_driver::{IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyWrite, Request};
 use libc::{c_int, ENOENT};
 use log::*;
-use crate::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, prv, rep, rep_mut};
-use crate::rfs_lib::desc::{EXT2_ROOT_INO, Ext2GroupDesc, Ext2INode,
-                           Ext2SuperBlock, Ext2FileType, FsLayoutArgs};
+use crate::rfs_lib::desc::Ext2FileType;
 use crate::rfs_lib::{TTL, RFS};
 use crate::rfs_lib::utils::*;
 
