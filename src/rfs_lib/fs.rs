@@ -302,12 +302,7 @@ impl Filesystem for RFS {
             Ok((will_continue, false))
         }));
         let mut data: Vec<u8> = [0 as u8].repeat(size);
-        for (i, block) in blocks.iter().enumerate() {
-            // if i * sz >= size { break; }
-            rep!(reply, self.seek_block(*block));
-            let right = min((i + 1) * sz, size);
-            rep!(reply, self.read_block(&mut data[(i * sz)..right]));
-        }
+
         // rep!(reply, last_data, String::from_utf8(Vec::from(&data[data.len()-16..])));
         // debug!("last 16 byte: {}", last_data);
         reply.data(&data);
@@ -317,11 +312,14 @@ impl Filesystem for RFS {
         prv!("write", ino, offset, data.len());
         debug!("#write: offset = {:x}, size = {:x}", offset, data.len());
         let offset = offset as usize;
+        let base = offset;
         let size = data.len() as usize;
         let sz = self.block_size();
         let ino = RFS::shift_ino(ino);
         let start_index = offset / self.block_size();
         assert_eq!(offset % self.block_size(), 0);
+
+        let mut blocks: Vec<usize> = vec![];
 
         let disk_size = self.disk_size();
         let mut last_index = 0 as usize;
@@ -329,11 +327,12 @@ impl Filesystem for RFS {
         // rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
         rep!(reply, self.visit_blocks_inode(ino, start_index, &mut |block, index| {
             let will_continue = (index + 1) * sz - offset < size;
-            // blocks.push(block);
-            // debug!("write walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
-            //     block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
+            blocks.push(block);
+            debug!("write walk to block {} index {}, continue={}, offset now={}, size now = {}",
+                block, index, will_continue, (index+1) * sz, (index+1) * sz - offset);
             if block == 0 {
                 warn!("zero block!");
+                return Ok((will_continue, will_continue));
             }
             if block * sz > disk_size {
                 panic!("error block number {:x}!", block);
@@ -349,6 +348,13 @@ impl Filesystem for RFS {
             last_block = block;
             Ok((will_continue, false))
         }));
+        let mut offset_write = 0 as usize;
+        for (i, block) in blocks.iter().enumerate() {
+            // if i * sz >= size { break; }
+            let right = min((i + 1) * sz, size);
+            rep!(reply, self.write_data_block(*block, &data[(i * sz)..right]));
+        }
+        reply.written((offset - base) as u32);
     }
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {

@@ -391,33 +391,93 @@ impl RFS {
 
     pub fn visit_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
         where F: FnMut(usize, usize) -> Result<(bool, bool)> {
-        let inode = self.get_inode(ino)?;
+        let mut inode = self.get_inode(ino)?;
+        let mut inode_modified = false;
+        macro_rules! save_inode_and_exit {
+            ($modified:expr) => {
+                if $modified { self.set_inode(ino, &inode)?; }
+                return Ok(());
+            };
+            () => {
+                save_inode_and_exit!(true);
+            }
+        }
+        // macro_rules! call_f {
+        //     ($block:expr, $index:expr, $inode_modified:expr) => {
+        //         {
+        //             let mut block = $block as usize;
+        //             loop {
+        //                 let r = f(block, $index)?;
+        //                 if !r.1 {
+        //                     // reach data end, and need to allocate new block
+        //                     block = self.allocate_block()?;
+        //                     $inode_modified = true;
+        //                 } else {
+        //                     if !r.0 { save_inode_and_exit!($inode_modified); }
+        //                 }
+        //             }
+        //             block
+        //         }
+        //     };
+        // }
         for i in block_index..self.threshold(0) {
-            let r = f(inode.i_block[i] as usize, i)?;
-            if !r.0 { return Ok(()); }
+            // call_f!()
+            loop {
+                let r = f(inode.i_block[i] as usize, i)?;
+                if !r.1 {
+                    // reach data end, and need to allocate new block
+                    let new_block = self.allocate_block()?;
+                    inode.i_block[i] = new_block as u32;
+                    inode_modified = true;
+                } else {
+                    if !r.0 { save_inode_and_exit!(inode_modified); }
+                    break;
+                }
+            }
         }
         let layer_size = self.block_size() / 4;
         let mut layer_index = [usize::MAX; 3];
+        let mut layer_modified = [false; 3];
         let mut layer_data = vec![self.create_block_vec(); 3];
         let mut buf_u32 = [0 as u8; 4];
+        macro_rules! dump_index_table {
+            ($l:expr) => {
+                if layer_modified[$l] {
+                    self.write_data_block(layer_index[$l], &layer_data[$l])?;
+                    layer_modified[$l] = false;
+                }
+            };
+        }
         // 12 -> L1
         for i in max(block_index, self.threshold(0))..self.threshold(1) {
             let block_number = inode.i_block[12] as usize;
             if layer_index[0] != block_number {
+                dump_index_table!(0);
                 self.read_data_block(block_number, &mut layer_data[0])?;
                 layer_index[0] = block_number;
             }
             let offset = (i - self.threshold(0)) << 2;
-            buf_u32.copy_from_slice(&layer_data[0][offset..offset + 4]);
-            let block = u32::from_le_bytes(buf_u32.clone()) as usize;
-            // debug!("buf: {:x?}, block: {:x}", buf_u32, block);
-            let r = f(block, i)?;
-            if !r.0 { return Ok(()); }
+            loop {
+                let layer_slice = &mut layer_data[0][offset..offset + 4];
+                buf_u32.copy_from_slice(layer_slice);
+                let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+                let r = f(block, i)?;
+                if !r.1 {
+                    let new_block = self.allocate_block()?;
+                    layer_slice.copy_from_slice(&new_block.to_be_bytes());
+                    layer_modified[0] = false;
+                } else {
+                    if !r.0 { save_inode_and_exit!(layer_modified[0]); }
+                    break;
+                }
+            }
         }
+        dump_index_table!(0);
         // 13 -> L2
         for i in range_step(self.threshold(1), self.threshold(2), layer_size) {
             let block_number = inode.i_block[13] as usize;
             if layer_index[0] != block_number {
+                dump_index_table!(0);
                 self.read_data_block(block_number, &mut layer_data[0])?;
                 layer_index[0] = block_number;
             }
@@ -429,6 +489,7 @@ impl RFS {
                 if block_index > j { continue; }
                 let block_number = block;
                 if layer_index[1] != block_number {
+                    dump_index_table!(1);
                     self.read_data_block(block_number, &mut layer_data[1])?;
                     layer_index[1] = block_number;
                 }
@@ -439,6 +500,8 @@ impl RFS {
                 if !r.0 { return Ok(()); }
             }
         }
+        dump_index_table!(0);
+        dump_index_table!(1);
         // 14 -> L3
         panic!("L3");
         // TODO: L3, bigger file will be not found
