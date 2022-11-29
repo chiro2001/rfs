@@ -159,8 +159,21 @@ impl RFS {
     }
 
     /// Print basic fs info
+    /// see: https://lostjeffle.bitcron.com/blog/MWeb/docs/media/15901301484642/15247422226670.jpg
     pub fn print_stats(self: &Self) {
         info!("fs stats: {}", self.super_block.to_string());
+        info!("fs layout:");
+        println!("| BSIZE = {} B |", self.block_size());
+        let mut block_layout: Vec<String> = vec![];
+        block_layout.push("Boot(1)".to_string());
+        block_layout.push("Super(1)".to_string());
+        block_layout.push("GroupDesc(1)".to_string());
+        block_layout.push("DATA Map(1)".to_string());
+        block_layout.push("Inode Map(1)".to_string());
+        block_layout.push(format!("Inode Table({})", self.super_block.s_inodes_count as usize
+            / (self.block_size() / size_of::<Ext2INode>())));
+        block_layout.push("DATA(*)".to_string());
+        println!("| {} |", block_layout.join(" | "));
     }
 
     /// Calculate block number and offset in a block for inode
