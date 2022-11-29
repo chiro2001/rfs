@@ -5,12 +5,13 @@ use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyWr
 use libc::{c_int, ENOENT};
 use log::*;
 use crate::rfs_lib::desc::Ext2FileType;
-use crate::rfs_lib::{TTL, RFS};
+use crate::rfs_lib::{TTL, RFS, DEVICE_FILE};
 use crate::rfs_lib::utils::*;
 
 impl Filesystem for RFS {
     fn init(&mut self, _req: &Request<'_>) -> Result<(), c_int> {
-        ret(self.rfs_init())
+        let file = DEVICE_FILE.read().unwrap().clone();
+        ret(self.rfs_init(&file))
     }
 
     fn destroy(&mut self, _req: &Request<'_>) {

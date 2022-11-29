@@ -5,6 +5,7 @@ use std::io::Read;
 use std::mem::size_of;
 use std::path::Path;
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub use disk_driver;
 use anyhow::{anyhow, Result};
@@ -28,8 +29,9 @@ use crate::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, prv};
 /// Data TTL, 1 second default
 const TTL: Duration = Duration::from_secs(1);
 
+// #[derive(Sync)]
 pub struct RFS {
-    pub driver: Box<dyn DiskDriver>,
+    pub driver: Mutex<Box<dyn DiskDriver>>,
     pub driver_info: DiskInfo,
     pub super_block: Ext2SuperBlockMem,
     pub group_desc_table: Vec<Ext2GroupDesc>,
@@ -47,7 +49,7 @@ impl RFS {
     #[allow(dead_code)]
     pub fn new(driver: Box<dyn DiskDriver>) -> Self {
         Self {
-            driver,
+            driver: Mutex::new(driver),
             driver_info: Default::default(),
             super_block: Default::default(),
             group_desc_table: vec![],
@@ -71,7 +73,7 @@ impl RFS {
     fn read_disk_block(&mut self, buf: &mut [u8]) -> Result<()> {
         assert_eq!(buf.len(), self.disk_block_size());
         let sz = self.disk_block_size();
-        self.driver.ddriver_read(buf, sz)?;
+        self.driver.get_mut().unwrap().ddriver_read(buf, sz)?;
         Ok(())
     }
 
@@ -79,7 +81,7 @@ impl RFS {
     fn write_disk_block(&mut self, buf: &[u8]) -> Result<()> {
         assert_eq!(buf.len(), self.disk_block_size());
         let sz = self.disk_block_size();
-        self.driver.ddriver_write(buf, sz)?;
+        self.driver.get_mut().unwrap().ddriver_write(buf, sz)?;
         Ok(())
     }
 
@@ -101,7 +103,7 @@ impl RFS {
     fn seek_disk_block(&mut self, index: usize) -> Result<()> {
         let sz = self.disk_block_size();
         // info!("DISK seek to {:x}", index * sz);
-        let _n = self.driver.ddriver_seek((index * sz) as i64, SeekType::Set)?;
+        let _n = self.driver.get_mut().unwrap().ddriver_seek((index * sz) as i64, SeekType::Set)?;
         Ok(())
     }
 
@@ -805,14 +807,13 @@ impl RFS {
         self.allocate_bitmap(block, false)
     }
 
-    pub fn rfs_init(&mut self) -> Result<()> {
-        let file = DEVICE_FILE.read().unwrap().clone();
-        self.driver.ddriver_open(&file)?;
+    pub fn rfs_init(&mut self, file: &str) -> Result<()> {
+        self.driver.get_mut().unwrap().ddriver_open(file)?;
         // get and check size
         let mut buf = [0 as u8; 4];
-        self.driver.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf)?;
+        self.driver.get_mut().unwrap().ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf)?;
         self.driver_info.consts.layout_size = u32::from_be_bytes(buf.clone());
-        self.driver.ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf)?;
+        self.driver.get_mut().unwrap().ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf)?;
         self.driver_info.consts.iounit_size = u32::from_be_bytes(buf.clone());
         debug!("size of super block struct is {}", size_of::<Ext2SuperBlock>());
         debug!("size of group desc struct is {}", size_of::<Ext2GroupDesc>());
@@ -846,7 +847,7 @@ impl RFS {
             if mkfs {
                 // let's use mkfs.ext2
                 debug!("close driver");
-                self.driver.ddriver_close()?;
+                self.driver.get_mut().unwrap().ddriver_close()?;
                 // create file
                 let mut command = execute::command_args!("dd", format!("of={}", file), "if=/dev/zero",
                 format!("bs={}", self.disk_block_size()),
@@ -860,7 +861,7 @@ impl RFS {
                 let output = command.execute_output().unwrap();
                 info!("{}", String::from_utf8(output.stdout).unwrap());
                 // reload disk driver
-                self.driver.ddriver_open(&file)?;
+                self.driver.get_mut().unwrap().ddriver_open(&file)?;
                 self.seek_block(0)?;
                 self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
                 super_block = unsafe { deserialize_row(&data_blocks_head) };
@@ -1051,7 +1052,7 @@ impl RFS {
     }
 
     pub fn rfs_destroy(&mut self) -> Result<()> {
-        self.driver.ddriver_close()
+        self.driver.get_mut().unwrap().ddriver_close()
     }
 
     pub fn rfs_lookup(&mut self, parent: usize, name: &str) -> Result<(usize, Ext2INode)> {
