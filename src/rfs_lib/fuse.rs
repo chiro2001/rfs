@@ -90,12 +90,12 @@ impl Filesystem for RFS {
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
         prv!("readdir", ino, offset);
-        let ino = RFS::shift_ino(ino as usize);
-        rep!(reply, entries, self.get_dir_entries(ino));
-        for (i, d) in entries.iter().enumerate().skip(offset as usize) {
+        rep!(reply, entries, self.rfs_readdir(ino, offset));
+        for (i, d) in entries.iter().enumerate() {
+            let o = i + offset as usize;
             rep!(reply, inode, self.get_inode(d.inode as usize));
-            debug!("readdir entry[{}] [{}] {:?}", i, d.to_string(), d);
-            reply.add(d.inode as u64, (i + 1) as i64, inode.to_attr(d.inode as usize).kind, d.get_name());
+            debug!("readdir entry[{}] [{}] {:?}", o, d.to_string(), d);
+            reply.add(d.inode as u64, (o + 1) as i64, inode.to_attr(d.inode as usize).kind, d.get_name());
         }
         reply.ok();
     }

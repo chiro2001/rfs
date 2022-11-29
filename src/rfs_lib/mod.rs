@@ -1240,6 +1240,13 @@ impl RFS {
         debug!("#write: reply written = {}", written);
         Ok(written as u32)
     }
+
+    pub fn rfs_readdir(&mut self, ino: u64, offset: i64) -> Result<Vec<Ext2DirEntry>> {
+        let ino = RFS::shift_ino(ino as usize);
+        let entries = self.get_dir_entries(ino)?.into_iter()
+            .skip(offset as usize).collect::<Vec<Ext2DirEntry>>();
+        Ok(entries)
+    }
 }
 
 #[cfg(test)]
