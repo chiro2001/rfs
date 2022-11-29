@@ -174,6 +174,8 @@ impl RFS {
             / (self.block_size() / size_of::<Ext2INode>())));
         block_layout.push("DATA(*)".to_string());
         println!("| {} |", block_layout.join(" | "));
+        info!("For inode bitmap, see @ {:x}", self.get_group_desc().bg_inode_bitmap as usize * self.block_size());
+        info!("For  data bitmap, see @ {:x}", self.get_group_desc().bg_block_bitmap as usize * self.block_size());
     }
 
     /// Calculate block number and offset in a block for inode

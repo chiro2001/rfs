@@ -110,7 +110,6 @@ impl Filesystem for RFS {
             debug!("fs: {:x?}", super_block);
         }
         self.super_block.apply_from(&super_block);
-        self.print_stats();
         // read block group desc table
         debug!("first start block: {}", self.super_block.s_first_data_block);
         ret(self.seek_block(self.super_block.s_first_data_block as usize + self.filesystem_first_block))?;
@@ -144,8 +143,7 @@ impl Filesystem for RFS {
         self.root_dir = ret(self.get_inode(EXT2_ROOT_INO))?;
         debug!("root dir inode: {:?}", self.root_dir);
 
-        // let entries = ret(self.get_dir_entries())?;
-
+        self.print_stats();
         debug!("Init done.");
         Ok(())
     }
