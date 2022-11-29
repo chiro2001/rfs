@@ -264,6 +264,7 @@ impl Filesystem for RFS {
         let mut offset_cnt = 0 as usize;
         for len in entries_lengths { offset_cnt += len; }
         if offset_cnt + entry.rec_len as usize >= self.block_size() {
+            info!("");
             // append block index and load next block
             assert_ne!(last_block_i, 11);
             last_block_i += 1;
@@ -277,6 +278,7 @@ impl Filesystem for RFS {
             offset_cnt = 0;
             for len in entries_lengths { offset_cnt += len; }
         }
+        debug!("parent inode blocks: {:x?}", inode_parent.i_block);
         // write entry to buf
         let mut data_block = self.create_block_vec();
         rep!(reply, self.read_block(&mut data_block));

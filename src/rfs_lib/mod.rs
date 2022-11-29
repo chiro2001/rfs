@@ -221,6 +221,7 @@ impl RFS {
 
     /// Read all directory entries in one block
     pub fn get_block_dir_entries(self: &mut Self, block: usize) -> Result<Vec<Ext2DirEntry>> {
+        if block == 0 { return Ok(vec![]); }
         let data_block = self.get_data_block(block)?;
         let mut p = 0;
         let mut dirs = vec![];
@@ -256,7 +257,12 @@ impl RFS {
         //     Ok(index * sz < size)
         // }));
 
-        self.get_block_dir_entries(inode.i_block[0] as usize)
+        Ok(inode.i_block.iter().take(12)
+            .map(|b| match self.get_block_dir_entries(*b as usize) {
+                Ok(e) => e,
+                Err(_) => vec![]
+            }).into_iter()
+            .filter(|x| !x.is_empty()).flatten().collect())
     }
 
     /// Block index layer threshold
