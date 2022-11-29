@@ -83,64 +83,9 @@ impl Filesystem for RFS {
     }
 
     fn write(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, data: &[u8], _flags: u32, reply: ReplyWrite) {
-        let size = data.len() as usize;
-        prv!("write", ino, offset, size);
-        debug!("#write: offset = {:x}, size = {:x}", offset, size);
-        let mut offset = offset as usize;
-        let base = offset;
-        let sz = self.block_size();
-        let ino = RFS::shift_ino(ino as usize);
-        let start_index = offset as usize / self.block_size();
-        assert_eq!(offset % self.block_size(), 0);
-
-        let mut blocks: Vec<usize> = vec![];
-
-        let disk_size = self.disk_size();
-        let mut last_index = 0 as usize;
-        let mut last_block = 0 as usize;
-        assert_eq!(0, offset % sz);
-        // rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
-        rep!(reply, self.visit_blocks_inode(ino, start_index, &mut |block, index| {
-            let will_continue = (index + 1) * sz - offset < size;
-            debug!("write walk to block {} index {}, continue={}, offset now={}, size now = {}, size total = {}",
-                block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, size);
-            if block == 0 {
-                debug!("zero block!");
-                return Ok((will_continue, index * sz - offset < size));
-            }
-            blocks.push(block);
-            if block * sz > disk_size {
-                panic!("error block number {:x}!", block);
-            }
-            // Ok((index + 1 - start_index) * sz < size)
-            if last_index != 0 && last_index + 1 != index {
-                panic!("error index increase! index now: {}", index);
-            }
-            last_index = index;
-            if last_block != 0 && last_block > block {
-                error!("error block increase! block now: {}, last block: {}", block, last_block);
-            }
-            last_block = block;
-            Ok((will_continue, false))
-        }));
-        for (i, block) in blocks.iter().enumerate() {
-            // if i * sz >= size { break; }
-            let right = min((i + 1) * sz, size);
-            rep!(reply, self.write_data_block(*block, &data[(i * sz)..right]));
-            offset += right - (i * sz);
-        }
-        debug!("update file stats");
-        rep_mut!(reply, inode, self.get_inode(ino));
-        let filesize = inode.i_size as i64 | ((inode.i_size_high as i64) << 32);
-        if offset as i64 > filesize {
-            // TODO: large file
-            inode.i_size = offset as u32;
-            inode.i_size_high = (offset >> 32) as u32;
-            rep!(reply, self.set_inode(ino, &inode));
-        }
-        let written = offset - base;
-        debug!("#write: reply written = {}", written);
-        reply.written(written as u32);
+        prv!("write", ino, offset, data.len());
+        rep!(reply, written, self.rfs_write(ino, offset, data));
+        reply.written(written);
     }
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
