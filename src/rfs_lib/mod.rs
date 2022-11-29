@@ -615,14 +615,80 @@ impl RFS {
         entry.inode = ino_free as u32;
         debug!("entry use new ino {}", ino_free);
 
+        let mut data_block_free = 0 as usize;
+        match node_type {
+            Ext2FileType::Directory | Ext2FileType::RegularFile => {
+                debug!("finding new data block...");
+                let block_free = self.allocate_block()?;
+                data_block_free = block_free;
+                debug!("found free block: {}", data_block_free);
+            }
+            _ => {}
+        };
+
         inode.i_mode = (mode & 0xFFF) as u16 | (file_type << 12) as u16;
         // append to parent dir entry
         let mut last_block_i = usize::MAX;
         for (i, d) in inode_parent.i_block.iter().enumerate() {
             if *d != 0 { last_block_i = i; }
         }
+        let block_size = self.block_size();
+        let mut init_directory = |entry: &mut Ext2DirEntry, inode: &Ext2INode|
+                                  -> Result<(Vec<u8>, Ext2INode)> {
+            let mut inode = inode.clone();
+            inode.i_blocks = 1;
+            inode.i_size = block_size as u32;
+            debug!("inode.i_blocks = {}, inode.i_size = {}", inode.i_blocks, inode.i_size);
+            let mut entries = vec![];
+            debug!("set first data block...");
+            inode.i_block[0] = data_block_free as u32;
+            debug!("data block now: {:?}", inode.i_block[0]);
+            let mut dir_this = entry.clone();
+            dir_this.update_name(".");
+            entries.push(dir_this);
+            let dir_parent = Ext2DirEntry::new_dir("..", parent);
+            entries.push(dir_parent);
+            let lens = entries.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
+            let mut offset = 0;
+            for l in &lens {
+                offset += l;
+            }
+            // pad rec_len
+            let mut entry_last = entries.last().unwrap().clone();
+            offset -= entry_last.rec_len as usize;
+            let entry_last_real_len = entry_last.rec_len;
+            entry_last.rec_len = (block_size - offset) as u16;
+            let entries_len = entries.len();
+            entries[entries_len - 1] = entry_last;
+            // let mut block_data = self.create_block_vec();
+            let mut block_data = [0 as u8].repeat(block_size);
+            offset = 0;
+            for (i, entry) in entries.iter().enumerate() {
+                debug!("write directory entry {} {:?}", entry.to_string(), entry);
+                if i != entries_len - 1 {
+                    debug!("write offset [{}..{}]", offset, offset + entry.rec_len as usize);
+                    block_data[offset..offset + entry.rec_len as usize]
+                        .copy_from_slice(&unsafe { serialize_row(entry) }[..entry.rec_len as usize]);
+                    offset += entry.rec_len as usize;
+                } else {
+                    debug!("write offset [{}..{}]", offset, offset + entry_last_real_len as usize);
+                    block_data[offset..offset + entry_last_real_len as usize]
+                        .copy_from_slice(&unsafe { serialize_row(entry) }[..entry_last_real_len as usize]);
+                }
+            }
+            // self.write_data_block(data_block_free, &block_data)
+            Ok((block_data, inode))
+        };
         if last_block_i == usize::MAX {
-            panic!("data block is empty");
+            if node_type == Ext2FileType::Directory {
+                warn!("data block is empty, creating a block for this directory");
+                let dir_entry_block_data = init_directory(&mut entry, &inode)?;
+                inode = dir_entry_block_data.1;
+                self.write_data_block(data_block_free, &dir_entry_block_data.0)?;
+                last_block_i = 0;
+            } else {
+                panic!("data block is empty");
+            }
         }
         // TODO layer 1-3 support
         assert!(!(last_block_i == 12 || last_block_i == 13 || last_block_i == 14));
@@ -703,60 +769,13 @@ impl RFS {
         let attr = inode.to_attr(ino_free);
         debug!("file {} == {} created! attr: {:?}", name, entry.get_name(), attr);
 
-        let mut data_block_free = 0 as usize;
-        match node_type {
-            Ext2FileType::Directory | Ext2FileType::RegularFile => {
-                debug!("finding new data block...");
-                let block_free = self.allocate_block()?;
-                data_block_free = block_free;
-                debug!("found free block: {}", data_block_free);
-            }
-            _ => {}
-        };
         match node_type {
             Ext2FileType::Directory => {
                 debug!("is directory, creating directory entries at block {}", data_block_free);
                 debug!("set self size to one block...");
-                inode.i_blocks = 1;
-                inode.i_size = self.block_size() as u32;
-                debug!("inode.i_blocks = {}, inode.i_size = {}", inode.i_blocks, inode.i_size);
-                let mut entries = vec![];
-                debug!("set first data block...");
-                inode.i_block[0] = data_block_free as u32;
-                debug!("data block now: {:?}", inode.i_block[0]);
-                let mut dir_this = entry.clone();
-                dir_this.update_name(".");
-                entries.push(dir_this);
-                let dir_parent = Ext2DirEntry::new_dir("..", parent);
-                entries.push(dir_parent);
-                let lens = entries.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
-                let mut offset = 0;
-                for l in &lens {
-                    offset += l;
-                }
-                // pad rec_len
-                let mut entry_last = entries.last().unwrap().clone();
-                offset -= entry_last.rec_len as usize;
-                let entry_last_real_len = entry_last.rec_len;
-                entry_last.rec_len = (self.block_size() - offset) as u16;
-                let entries_len = entries.len();
-                entries[entries_len - 1] = entry_last;
-                let mut block_data = self.create_block_vec();
-                offset = 0;
-                for (i, entry) in entries.iter().enumerate() {
-                    debug!("write directory entry {} {:?}", entry.to_string(), entry);
-                    if i != entries_len - 1 {
-                        debug!("write offset [{}..{}]", offset, offset + entry.rec_len as usize);
-                        block_data[offset..offset + entry.rec_len as usize]
-                            .copy_from_slice(&unsafe { serialize_row(entry) }[..entry.rec_len as usize]);
-                        offset += entry.rec_len as usize;
-                    } else {
-                        debug!("write offset [{}..{}]", offset, offset + entry_last_real_len as usize);
-                        block_data[offset..offset + entry_last_real_len as usize]
-                            .copy_from_slice(&unsafe { serialize_row(entry) }[..entry_last_real_len as usize]);
-                    }
-                }
-                self.write_data_block(data_block_free, &block_data)?;
+                let dir_entry_block_data = init_directory(&mut entry, &inode)?;
+                inode = dir_entry_block_data.1;
+                self.write_data_block(data_block_free, &dir_entry_block_data.0)?;
             }
             Ext2FileType::RegularFile => {
                 debug!("is regular file, first data at block {}", data_block_free);

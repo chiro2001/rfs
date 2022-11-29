@@ -111,6 +111,9 @@ impl Filesystem for RFS {
                 }
             } else {
                 // use manual fs layout
+                // reload disk driver
+                ret(self.driver.ddriver_open(&file))?;
+                ret(self.seek_block(0))?;
                 let default_layout_str = "
 | BSIZE = 1024 B |
 | Boot(1) | Super(1) | GroupDesc(1) | DATA Map(1) | Inode Map(1) | Inode Table(128) | DATA(*) |";
@@ -186,7 +189,7 @@ impl Filesystem for RFS {
                         }
                         layout.block_count = self.disk_size() / layout.block_size;
                         info!("read fs.layout: {:#?}", layout);
-                        let super_block = Ext2SuperBlock::from(layout.clone());
+                        super_block = Ext2SuperBlock::from(layout.clone());
                         let group = Ext2GroupDesc::from(layout.clone());
                         // apply settings, enable functions
                         self.filesystem_first_block = if layout.boot { 1 } else { 0 };

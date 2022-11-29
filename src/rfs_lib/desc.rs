@@ -290,7 +290,7 @@ pub const EXT2_FL_USER_VISIBLE: usize = 0x604BDFFF;
 ///   User modifiable flags 
 pub const EXT2_FL_USER_MODIFIABLE: usize = 0x604B80FF;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[repr(C, align(2))]
 pub struct Ext2INode {
     /*00*/ ///   File mode
