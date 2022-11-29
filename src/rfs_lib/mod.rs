@@ -1,10 +1,15 @@
 /// Filesystem logics
 use std::cmp::max;
+use std::fs::File;
+use std::io::Read;
 use std::mem::size_of;
+use std::path::Path;
+use std::process::Stdio;
 use std::time::Duration;
 pub use disk_driver;
 use anyhow::{anyhow, Result};
-use disk_driver::{DiskDriver, DiskInfo, SeekType};
+use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE, SeekType};
+use execute::Execute;
 use log::*;
 use num::range_step;
 
@@ -14,12 +19,11 @@ pub mod desc;
 pub mod types;
 pub mod mem;
 pub mod fuse;
-pub mod fs;
 
 use utils::*;
 use mem::*;
 use desc::*;
-use crate::prv;
+use crate::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, prv};
 
 #[cxx::bridge]
 mod ffi {
@@ -809,6 +813,251 @@ impl RFS {
     pub fn allocate_inode(&mut self) -> Result<usize> {
         let block = self.get_group_desc().bg_inode_bitmap as usize;
         self.allocate_bitmap(block, false)
+    }
+
+    pub fn rfs_init(&mut self) -> Result<()> {
+        let file = DEVICE_FILE.read().unwrap().clone();
+        self.driver.ddriver_open(&file)?;
+        // get and check size
+        let mut buf = [0 as u8; 4];
+        self.driver.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf)?;
+        self.driver_info.consts.layout_size = u32::from_be_bytes(buf.clone());
+        self.driver.ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf)?;
+        self.driver_info.consts.iounit_size = u32::from_be_bytes(buf.clone());
+        debug!("size of super block struct is {}", size_of::<Ext2SuperBlock>());
+        debug!("size of group desc struct is {}", size_of::<Ext2GroupDesc>());
+        debug!("size of inode struct is {}", size_of::<Ext2INode>());
+
+        // at lease 32 blocks
+        info!("Disk {} has {} IO blocks.", file, self.driver_info.consts.disk_block_count());
+        if self.disk_size() < 32 * 0x400 {
+            return Err(anyhow!("Too small disk!"));
+        }
+        info!("disk info: {:?}", self.driver_info);
+        // read super block
+        let super_blk_count = size_of::<Ext2SuperBlock>() / self.disk_block_size();
+        let disk_block_size = self.disk_block_size();
+        info!("super block size {} disk block ({} bytes)", super_blk_count, super_blk_count * self.disk_block_size());
+        let mut data_blocks_head = [0 as u8].repeat((disk_block_size * super_blk_count) as usize);
+        self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
+        let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_blocks_head) };
+        if !super_block.magic_matched() {
+            // maybe there is one block reserved for boot,
+            // read one block again
+            self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
+            // data_blocks_head.reverse();
+            super_block = unsafe { deserialize_row(&data_blocks_head) };
+            if super_block.magic_matched() { self.filesystem_first_block = 1; }
+        }
+        let format = FORCE_FORMAT.read().unwrap().clone();
+        if !super_block.magic_matched() || format {
+            if !format { warn!("FileSystem not found! creating super block..."); } else { warn!("Will format disk!") }
+            let mkfs = MKFS_FORMAT.read().unwrap().clone();
+            if mkfs {
+                // let's use mkfs.ext2
+                debug!("close driver");
+                self.driver.ddriver_close()?;
+                // create file
+                let mut command = execute::command_args!("dd", format!("of={}", file), "if=/dev/zero",
+                format!("bs={}", self.disk_block_size()),
+                format!("count={}", self.disk_size() / self.disk_block_size()));
+                command.stdout(Stdio::piped());
+                let output = command.execute_output().unwrap();
+                info!("{}", String::from_utf8(output.stdout).unwrap());
+                // use version 0
+                let mut command = execute::command_args!("mkfs.ext2", file, "-t", "ext2", "-r", "0");
+                command.stdout(Stdio::piped());
+                let output = command.execute_output().unwrap();
+                info!("{}", String::from_utf8(output.stdout).unwrap());
+                // reload disk driver
+                self.driver.ddriver_open(&file)?;
+                self.seek_block(0)?;
+                self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
+                super_block = unsafe { deserialize_row(&data_blocks_head) };
+                if !super_block.magic_matched() {
+                    self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
+                    super_block = unsafe { deserialize_row(&data_blocks_head) };
+                }
+                if super_block.magic_matched() {
+                    self.filesystem_first_block = 1;
+                    info!("Disk driver reloaded.");
+                } else {
+                    return Err(anyhow!("Make filesystem failed!"));
+                }
+            } else {
+                // use manual fs layout
+                // reload disk driver
+                self.seek_block(0)?;
+                let default_layout_str = "
+| BSIZE = 1024 B |
+| Boot(1) | Super(1) | GroupDesc(1) | DATA Map(1) | Inode Map(1) | Inode Table(128) | DATA(*) |";
+                debug!("loading fs.layout...");
+                let path = Path::new("include/fs.layout");
+                let mut layout_string = default_layout_str.to_string();
+                if path.exists() {
+                    let mut file = File::open(path).unwrap();
+                    let mut data = vec![];
+                    file.read_to_end(&mut data).unwrap();
+                    layout_string = String::from_utf8(data).unwrap();
+                } else {
+                    warn!("fs.layout({}) not found! use default layout: {}", path.to_str().unwrap(), default_layout_str);
+                }
+                let lines = layout_string.lines();
+                let mut layout = FsLayoutArgs::default();
+                for line in lines {
+                    if line.is_empty() || !line.starts_with("|") { continue; }
+                    let line = line.to_lowercase();
+                    if line.contains("bsize") {
+                        let splits = line.split(" ").collect::<Vec<&str>>();
+                        // debug!("split = {:?}", splits);
+                        let n = splits[3];
+                        // debug!("split n = {}", n);
+                        layout.block_size = str::parse::<usize>(n).unwrap();
+                        info!("block_size = {}", layout.block_size);
+                    } else {
+                        let splits = line.split("|")
+                            .map(|x| x.trim())
+                            .filter(|x| x.len() > 0)
+                            .filter(|x| x.contains("("))
+                            .collect::<Vec<&str>>();
+                        debug!("splits: {:?}", splits);
+                        let mut offset_block = 0;
+                        for s in splits {
+                            let v = if s.contains("*") {
+                                0 as usize
+                            } else {
+                                str::parse::<usize>(&s[s.find("(").unwrap() + 1..s.len() - 1]).unwrap()
+                            };
+                            let name = &s[..s.find("(").unwrap()];
+                            debug!("{} = {}", name, v);
+                            match name {
+                                "boot" => {
+                                    layout.boot = true;
+                                    offset_block += 1;
+                                }
+                                "super" => {
+                                    layout.super_block = offset_block;
+                                    offset_block += v;
+                                }
+                                "groupdesc" => {
+                                    layout.group_desc = offset_block;
+                                    offset_block += v;
+                                }
+                                "data map" => {
+                                    layout.data_map = offset_block;
+                                    offset_block += 1;
+                                }
+                                "inode map" => {
+                                    layout.inode_map = offset_block;
+                                    offset_block += 1;
+                                }
+                                "inode table" => {
+                                    layout.inode_table = offset_block;
+                                    layout.inode_count = v * (layout.block_size / size_of::<Ext2INode>());
+                                    offset_block += v;
+                                }
+                                "data" => {}
+                                _ => {
+                                    warn!("unused layout option: {} = {}", name, v)
+                                }
+                            };
+                        }
+                        layout.block_count = self.disk_size() / layout.block_size;
+                        info!("read fs.layout: {:#?}", layout);
+                        super_block = Ext2SuperBlock::from(layout.clone());
+                        let group = Ext2GroupDesc::from(layout.clone());
+                        // apply settings, enable functions
+                        self.filesystem_first_block = if layout.boot { 1 } else { 0 };
+                        self.super_block.apply_from(&super_block);
+                        self.group_desc_table.clear();
+                        self.group_desc_table.push(group);
+                        self.seek_block(0)?;
+                        // clear disk
+                        let block_data = self.create_block_vec();
+                        // for i in 0..self.disk_size() / self.block_size() {
+                        for i in 0..6 {
+                            self.write_data_block(i, &block_data)?;
+                        }
+                        self.seek_block(0)?;
+                        if layout.boot { self.seek_block(1)?; }
+                        debug!("write super_block");
+                        let mut block_data = self.create_block_vec();
+                        block_data[..size_of::<Ext2SuperBlock>()].copy_from_slice(unsafe { serialize_row(&super_block) });
+                        self.write_block(&block_data)?;
+
+                        debug!("write group_desc");
+                        self.seek_block(self.super_block.s_first_data_block as usize + self.filesystem_first_block)?;
+                        let mut block_data = self.create_block_vec();
+                        block_data[..size_of::<Ext2GroupDesc>()].copy_from_slice(unsafe { serialize_row(&self.group_desc_table[0]) });
+                        self.write_block(&block_data)?;
+
+                        let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
+                        debug!("block bitmap at {} block", bg_block_bitmap);
+                        self.seek_block(bg_block_bitmap)?;
+                        let bitmap_data_block = self.create_block_vec();
+                        self.write_block(&bitmap_data_block)?;
+                        self.bitmap_data.clear();
+                        self.bitmap_data.extend_from_slice(&bitmap_data_block);
+
+                        let bg_inode_bitmap = self.get_group_desc().bg_inode_bitmap as usize;
+                        debug!("inode bitmap at {} block", bg_inode_bitmap);
+                        self.seek_block(bg_inode_bitmap)?;
+                        let bitmap_inode = self.create_block_vec();
+                        self.write_block(&bitmap_inode)?;
+                        self.bitmap_inode.clear();
+                        self.bitmap_inode.extend_from_slice(&bitmap_inode);
+
+                        // create root directory
+                        // self.make_node(1, "..", 0o755, Ext2FileType::Directory)?;
+                        // self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
+                        self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
+                        // self.make_node(EXT2_ROOT_INO, "lost+found", 0o755, Ext2FileType::Directory)?;
+                    }
+                }
+            }
+        } else {
+            info!("FileSystem found!");
+            debug!("fs: {:x?}", super_block);
+        }
+        self.super_block.apply_from(&super_block);
+        // read block group desc table
+        debug!("first start block: {}", self.super_block.s_first_data_block);
+        self.seek_block(self.super_block.s_first_data_block as usize + self.filesystem_first_block)?;
+        let mut data_block = self.create_block_vec();
+        self.read_block(&mut data_block)?;
+        // just assert there is only one group now
+        let group: Ext2GroupDesc = unsafe { deserialize_row(&data_block) };
+        // debug!("group desc data: {:x?}", data_block);
+        debug!("group: {:x?}", group);
+        self.group_desc_table.push(group);
+
+        let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
+        debug!("block bitmap at {} block", bg_block_bitmap);
+        self.seek_block(bg_block_bitmap)?;
+        let mut bitmap_data_block = self.create_block_vec();
+        // ino 1 and 2 reserved
+        bitmap_data_block[0] = 0x3;
+        self.read_block(&mut bitmap_data_block)?;
+        debug!("block bit map: {:?}", &bitmap_data_block[..32]);
+        self.bitmap_data.clear();
+        self.bitmap_data.extend_from_slice(&bitmap_data_block);
+
+        let bg_inode_bitmap = self.get_group_desc().bg_inode_bitmap as usize;
+        debug!("inode bitmap at {} block", bg_inode_bitmap);
+        self.seek_block(bg_inode_bitmap)?;
+        let mut bitmap_inode = self.create_block_vec();
+        self.read_block(&mut bitmap_inode)?;
+        debug!("inode bit map: {:?}", &bitmap_inode[..32]);
+        self.bitmap_inode.clear();
+        self.bitmap_inode.extend_from_slice(&bitmap_inode);
+
+        // load root dir
+        self.root_dir = self.get_inode(EXT2_ROOT_INO)?;
+        debug!("root dir inode: {:?}", self.root_dir);
+
+        self.print_stats();
+        debug!("Init done.");
+        Ok(())
     }
 }
 
