@@ -2,7 +2,7 @@
 use macro_tools::*;
 use crate::rfs_lib::Ext2SuperBlock;
 
-#[derive(ApplyMem, Default)]
+#[derive(ApplyMem, Default, Clone)]
 #[ApplyMemTo(Ext2SuperBlock)]
 pub struct Ext2SuperBlockMem {
     /// Inodes count

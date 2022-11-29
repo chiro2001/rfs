@@ -12,6 +12,7 @@ use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZ
 use execute::Execute;
 use log::*;
 use num::range_step;
+// use macro_tools::*;
 
 #[macro_use]
 pub mod utils;
@@ -28,6 +29,23 @@ use crate::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, prv};
 /// Data TTL, 1 second default
 const TTL: Duration = Duration::from_secs(1);
 
+#[derive(Default, Clone)]
+pub struct RFSBase {
+    pub driver_info: DiskInfo,
+    pub super_block: Ext2SuperBlockMem,
+    pub group_desc_table: Vec<Ext2GroupDesc>,
+    /// ext2 may has boot reserved 1 block prefix
+    pub filesystem_first_block: usize,
+    /// bitmap in memory
+    pub bitmap_inode: Vec<u8>,
+    pub bitmap_data: Vec<u8>,
+    /// Root directory
+    pub root_dir: Ext2INode,
+}
+
+// #[derive(ApplyMemType, Default)]
+// #[ApplyMemTo(RFSBase)]
+// #[ApplyMemType(T)]
 pub struct RFS<T: DiskDriver> {
     pub driver: T,
     pub driver_info: DiskInfo,

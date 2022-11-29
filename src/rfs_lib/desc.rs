@@ -88,7 +88,7 @@ struct Ext2AclEntry /* Access Control List Entry */
 /**
  * Structure of a blocks group descriptor
  */
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[repr(C, align(2))]
 pub struct Ext2GroupDesc {
     ///   Blocks bitmap block 
