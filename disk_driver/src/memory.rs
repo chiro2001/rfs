@@ -13,16 +13,16 @@ pub struct MemoryDiskDriver {
 }
 
 impl DiskDriver for MemoryDiskDriver {
-    fn ddriver_open(self: &mut Self, path: &str) -> Result<()> {
+    fn ddriver_open(&mut self, path: &str) -> Result<()> {
         println!("MemDrv open: {}", path);
         Ok(())
     }
 
-    fn ddriver_close(self: &mut Self) -> Result<()> {
+    fn ddriver_close(&mut self) -> Result<()> {
         Ok(())
     }
 
-    fn ddriver_seek(self: &mut Self, offset: i64, whence: SeekType) -> Result<u64> {
+    fn ddriver_seek(&mut self, offset: i64, whence: SeekType) -> Result<u64> {
         match whence {
             SeekType::Set => self.pointer = offset as usize,
             SeekType::Cur => self.pointer = (self.pointer as i64 + offset) as usize,
@@ -31,20 +31,20 @@ impl DiskDriver for MemoryDiskDriver {
         Ok(self.pointer as u64)
     }
 
-    fn ddriver_write(self: &mut Self, buf: &[u8], size: usize) -> Result<usize> {
+    fn ddriver_write(&mut self, buf: &[u8], size: usize) -> Result<usize> {
         assert!(buf.len() >= size);
         self.get_pointer_slice(size).copy_from_slice(&buf[..size]);
         self.pointer += size;
         Ok(size)
     }
 
-    fn ddriver_read(self: &mut Self, buf: &mut [u8], size: usize) -> Result<usize> {
+    fn ddriver_read(&mut self, buf: &mut [u8], size: usize) -> Result<usize> {
         buf[..size].copy_from_slice(self.get_pointer_slice(size));
         self.pointer += size;
         Ok(size)
     }
 
-    fn ddriver_ioctl(self: &mut Self, cmd: u32, arg: &mut [u8]) -> Result<()> {
+    fn ddriver_ioctl(&mut self, cmd: u32, arg: &mut [u8]) -> Result<()> {
         match cmd {
             IOC_REQ_DEVICE_SIZE => {
                 arg[0..4].copy_from_slice(&self.info.consts.layout_size.to_be_bytes());
@@ -68,7 +68,7 @@ impl DiskDriver for MemoryDiskDriver {
         }
     }
 
-    fn ddriver_reset(self: &mut Self) -> Result<()> {
+    fn ddriver_reset(&mut self) -> Result<()> {
         self.mem.copy_from_slice(&[0; MEM_DISK_SIZE]);
         // TODO: write superblock to erase all filesystem
         self.info = DiskInfo::default();
@@ -93,7 +93,7 @@ impl MemoryDiskDriver {
         }
     }
 
-    fn get_pointer_slice(self: &mut Self, size: usize) -> &mut [u8] {
+    fn get_pointer_slice(&mut self, size: usize) -> &mut [u8] {
         &mut self.mem[self.pointer..(size + self.pointer)]
     }
 }

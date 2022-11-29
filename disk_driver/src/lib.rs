@@ -26,7 +26,7 @@ pub struct DiskInfo {
 }
 
 impl DiskConst {
-    pub fn disk_block_count(self: &Self) -> usize {
+    pub fn disk_block_count(&self) -> usize {
         (self.layout_size / self.iounit_size).try_into().unwrap()
     }
 }
@@ -53,7 +53,7 @@ pub enum SeekType {
 }
 
 impl SeekType {
-    pub fn to_int(self: &Self) -> i32 {
+    pub fn to_int(&self) -> i32 {
         match self {
             SeekType::Set => 0,
             SeekType::Cur => 1,
@@ -65,19 +65,19 @@ impl SeekType {
 /// DiskDriver abstract interface
 pub trait DiskDriver {
     /// Open file
-    fn ddriver_open(self: &mut Self, path: &str) -> Result<()>;
+    fn ddriver_open(&mut self, path: &str) -> Result<()>;
     /// Close file
-    fn ddriver_close(self: &mut Self) -> Result<()>;
+    fn ddriver_close(&mut self) -> Result<()>;
     /// Move cursor
-    fn ddriver_seek(self: &mut Self, offset: i64, whence: SeekType) -> Result<u64>;
+    fn ddriver_seek(&mut self, offset: i64, whence: SeekType) -> Result<u64>;
     /// Write data to disk. Smallest unit is disk block.
-    fn ddriver_write(self: &mut Self, buf: &[u8], size: usize) -> Result<usize>;
+    fn ddriver_write(&mut self, buf: &[u8], size: usize) -> Result<usize>;
     /// Read data from disk. Smallest unit is disk block.
-    fn ddriver_read(self: &mut Self, buf: &mut [u8], size: usize) -> Result<usize>;
+    fn ddriver_read(&mut self, buf: &mut [u8], size: usize) -> Result<usize>;
     /// Read disk info, including disk size, disk unit and stats
-    fn ddriver_ioctl(self: &mut Self, cmd: u32, arg: &mut [u8]) -> Result<()>;
+    fn ddriver_ioctl(&mut self, cmd: u32, arg: &mut [u8]) -> Result<()>;
     /// Reset cursor, fill super block
-    fn ddriver_reset(self: &mut Self) -> Result<()>;
+    fn ddriver_reset(&mut self) -> Result<()>;
 }
 
 pub const IOC_REQ_DEVICE_SIZE: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('A' as u32) << (0 + 8)) | ((0) << 0) | ((size_of::<u32>() as u32) << ((0 + 8) + 8));

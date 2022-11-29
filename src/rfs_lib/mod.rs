@@ -14,6 +14,7 @@ pub mod desc;
 pub mod types;
 pub mod mem;
 pub mod fuse;
+pub mod fs;
 
 use utils::*;
 use mem::*;
@@ -65,16 +66,16 @@ impl RFS {
     }
 
     /// Get disk unit, available after init
-    fn disk_block_size(self: &Self) -> usize { self.driver_info.consts.iounit_size as usize }
+    fn disk_block_size(&self) -> usize { self.driver_info.consts.iounit_size as usize }
 
     /// Get disk sizs, available after init
-    fn disk_size(self: &Self) -> usize { self.driver_info.consts.layout_size as usize }
+    fn disk_size(&self) -> usize { self.driver_info.consts.layout_size as usize }
 
     /// Get filesystem block size, available after init
-    fn block_size(self: &Self) -> usize { (1 << self.super_block.s_log_block_size) * 0x400 as usize }
+    fn block_size(&self) -> usize { (1 << self.super_block.s_log_block_size) * 0x400 as usize }
 
     /// Read one disk block
-    fn read_disk_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
+    fn read_disk_block(&mut self, buf: &mut [u8]) -> Result<()> {
         assert_eq!(buf.len(), self.disk_block_size());
         let sz = self.disk_block_size();
         self.driver.ddriver_read(buf, sz)?;
@@ -82,7 +83,7 @@ impl RFS {
     }
 
     /// Write one disk block
-    fn write_disk_block(self: &mut Self, buf: &[u8]) -> Result<()> {
+    fn write_disk_block(&mut self, buf: &[u8]) -> Result<()> {
         assert_eq!(buf.len(), self.disk_block_size());
         let sz = self.disk_block_size();
         self.driver.ddriver_write(buf, sz)?;
@@ -90,21 +91,21 @@ impl RFS {
     }
 
     /// Read multi disk units from disk
-    fn read_disk_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
+    fn read_disk_blocks(&mut self, buf: &mut [u8], count: usize) -> Result<()> {
         let sz = self.disk_block_size();
         for i in 0..count { self.read_disk_block(&mut buf[(i * sz)..((i + 1) * sz)])? }
         Ok(())
     }
 
     /// Write multi disk units from disk
-    fn write_disk_blocks(self: &mut Self, buf: &[u8], count: usize) -> Result<()> {
+    fn write_disk_blocks(&mut self, buf: &[u8], count: usize) -> Result<()> {
         let sz = self.disk_block_size();
         for i in 0..count { self.write_disk_block(&buf[(i * sz)..((i + 1) * sz)])? }
         Ok(())
     }
 
     /// Seek disk cursor by bytes
-    fn seek_disk_block(self: &mut Self, index: usize) -> Result<()> {
+    fn seek_disk_block(&mut self, index: usize) -> Result<()> {
         let sz = self.disk_block_size();
         // info!("DISK seek to {:x}", index * sz);
         let _n = self.driver.ddriver_seek((index * sz) as i64, SeekType::Set)?;
@@ -113,54 +114,54 @@ impl RFS {
 
     /// How many disk unit for one filesystem block.
     /// fs block size should larger than ont disk unit
-    fn block_disk_ratio(self: &Self) -> usize { self.block_size() / self.disk_block_size() }
+    fn block_disk_ratio(&self) -> usize { self.block_size() / self.disk_block_size() }
 
     /// Seek disk by unit of fs block size
-    pub fn seek_block(self: &mut Self, index: usize) -> Result<()> {
+    pub fn seek_block(&mut self, index: usize) -> Result<()> {
         self.seek_disk_block(index * self.block_disk_ratio())
     }
 
     /// Read disk by one block
-    pub fn read_block(self: &mut Self, buf: &mut [u8]) -> Result<()> {
+    pub fn read_block(&mut self, buf: &mut [u8]) -> Result<()> {
         self.read_disk_blocks(buf, self.block_disk_ratio())
     }
 
     /// Write disk by one block
-    pub fn write_block(self: &mut Self, buf: &[u8]) -> Result<()> {
+    pub fn write_block(&mut self, buf: &[u8]) -> Result<()> {
         self.write_disk_blocks(buf, self.block_disk_ratio())
     }
 
     /// Read disk by multi-blocks
     #[allow(dead_code)]
-    pub fn read_blocks(self: &mut Self, buf: &mut [u8], count: usize) -> Result<()> {
+    pub fn read_blocks(&mut self, buf: &mut [u8], count: usize) -> Result<()> {
         self.read_disk_blocks(buf, self.block_disk_ratio() * count)
     }
 
     /// Write disk by multi-blocks
     #[allow(dead_code)]
-    pub fn write_blocks(self: &mut Self, buf: &[u8], count: usize) -> Result<()> {
+    pub fn write_blocks(&mut self, buf: &[u8], count: usize) -> Result<()> {
         self.write_disk_blocks(buf, self.block_disk_ratio() * count)
     }
 
     /// Create a Vec<u8> in block size
-    pub fn create_block_vec(self: &mut Self) -> Vec<u8> {
+    pub fn create_block_vec(&mut self) -> Vec<u8> {
         [0 as u8].repeat(self.block_size())
     }
 
     /// Create a Vec<u8> in multi-blocks size
     #[allow(dead_code)]
-    pub fn create_blocks_vec(self: &Self, count: usize) -> Vec<u8> {
+    pub fn create_blocks_vec(&self, count: usize) -> Vec<u8> {
         [0 as u8].repeat(self.block_size() * count)
     }
 
     /// Get `Ext2GroupDesc`, available after init
-    fn get_group_desc(self: &Self) -> &Ext2GroupDesc {
+    fn get_group_desc(&self) -> &Ext2GroupDesc {
         self.group_desc_table.get(0).unwrap()
     }
 
     /// Print basic fs info
     /// see: https://lostjeffle.bitcron.com/blog/MWeb/docs/media/15901301484642/15247422226670.jpg
-    pub fn print_stats(self: &Self) {
+    pub fn print_stats(&self) {
         info!("fs stats: {}", self.super_block.to_string());
         info!("fs layout:");
         println!("| BSIZE = {} B |", self.block_size());
@@ -179,7 +180,7 @@ impl RFS {
     }
 
     /// Calculate block number and offset in a block for inode
-    fn fetch_inode_block_offset(self: &Self, ino: usize) -> Result<(usize, usize)> {
+    fn fetch_inode_block_offset(&self, ino: usize) -> Result<(usize, usize)> {
         // should ino minus 1?
         let inodes_per_block = self.block_size() / EXT2_INODE_SIZE;
         // assert only one group
@@ -192,7 +193,7 @@ impl RFS {
     }
 
     /// Read inode struct according to ino number
-    pub fn get_inode(self: &mut Self, ino: usize) -> Result<Ext2INode> {
+    pub fn get_inode(&mut self, ino: usize) -> Result<Ext2INode> {
         let (block_number, offset) = self.fetch_inode_block_offset(ino)?;
         debug!("get_inode: inode {} at block {} offset {:x}, disk offset is {:x}",
             ino, block_number, offset, block_number * self.block_size());
@@ -203,7 +204,7 @@ impl RFS {
     }
 
     /// Write inode struct according to ino number
-    pub fn set_inode(self: &mut Self, ino: usize, inode: &Ext2INode) -> Result<()> {
+    pub fn set_inode(&mut self, ino: usize, inode: &Ext2INode) -> Result<()> {
         let (block_number, offset) = self.fetch_inode_block_offset(ino)?;
         let mut buf = self.create_block_vec();
         self.seek_block(block_number)?;
@@ -216,7 +217,7 @@ impl RFS {
     }
 
     /// Read one data block and return one Vec<u8>
-    pub fn get_data_block(self: &mut Self, block: usize) -> Result<Vec<u8>> {
+    pub fn get_data_block(&mut self, block: usize) -> Result<Vec<u8>> {
         self.seek_block(block)?;
         let mut buf = self.create_block_vec();
         self.read_block(&mut buf)?;
@@ -224,14 +225,14 @@ impl RFS {
     }
 
     /// Read one data block to mutable slice inplace
-    pub fn read_data_block(self: &mut Self, block: usize, buf: &mut [u8]) -> Result<()> {
+    pub fn read_data_block(&mut self, block: usize, buf: &mut [u8]) -> Result<()> {
         self.seek_block(block)?;
         self.read_block(buf)?;
         Ok(())
     }
 
     /// Write one data block from slice inplace
-    pub fn write_data_block(self: &mut Self, block: usize, buf: &[u8]) -> Result<()> {
+    pub fn write_data_block(&mut self, block: usize, buf: &[u8]) -> Result<()> {
         self.seek_block(block)?;
         assert!(buf.len() <= self.block_size(), "support sz <= block");
         if buf.len() % self.block_size() == 0 {
@@ -248,7 +249,7 @@ impl RFS {
     }
 
     /// Read all directory entries in one block
-    pub fn get_block_dir_entries(self: &mut Self, block: usize) -> Result<Vec<Ext2DirEntry>> {
+    pub fn get_block_dir_entries(&mut self, block: usize) -> Result<Vec<Ext2DirEntry>> {
         if block == 0 { return Ok(vec![]); }
         let data_block = self.get_data_block(block)?;
         let mut p = 0;
@@ -268,7 +269,7 @@ impl RFS {
     }
 
     /// Read all directory entries by ino
-    pub fn get_dir_entries(self: &mut Self, ino: usize) -> Result<Vec<Ext2DirEntry>> {
+    pub fn get_dir_entries(&mut self, ino: usize) -> Result<Vec<Ext2DirEntry>> {
         let inode = self.get_inode(ino)?;
         prv!(inode);
         // TODO: walk all blocks, including indirect blocks
@@ -295,7 +296,7 @@ impl RFS {
     }
 
     /// Block index layer threshold
-    pub fn threshold(self: &Self, l: usize) -> usize {
+    pub fn threshold(&self, l: usize) -> usize {
         let layer = self.block_size() / 4;
         match l {
             0 => 12,
@@ -307,7 +308,7 @@ impl RFS {
     }
 
     #[allow(dead_code)]
-    pub fn threshold_diff(self: &Self, l: usize) -> usize {
+    pub fn threshold_diff(&self, l: usize) -> usize {
         let layer = self.block_size() / 4;
         match l {
             0 => 12,
@@ -320,7 +321,7 @@ impl RFS {
 
     /// Walk on *ONE* Layer
     #[allow(dead_code)]
-    pub fn walk_blocks<const L: usize, F>(self: &mut Self, start_block: usize, block_index: usize, s: usize, mut f: &mut F) -> Result<bool>
+    pub fn walk_blocks<const L: usize, F>(&mut self, start_block: usize, block_index: usize, s: usize, mut f: &mut F) -> Result<bool>
         where F: FnMut(usize, usize) -> Result<bool> {
         debug!("walk_blocks<{}>(start_block={}, block_index={})", L, start_block, block_index);
         if start_block == 0 {
@@ -377,7 +378,7 @@ impl RFS {
 
     /// Walk for ino
     #[allow(dead_code)]
-    pub fn walk_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
+    pub fn walk_blocks_inode<F>(&mut self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
         where F: FnMut(usize, usize) -> Result<bool> {
         let inode = self.get_inode(ino)?;
         macro_rules! visit_layer {
@@ -420,7 +421,7 @@ impl RFS {
         Ok(())
     }
 
-    pub fn visit_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
+    pub fn visit_blocks_inode<F>(&mut self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
         where F: FnMut(usize, usize) -> Result<(bool, bool)> {
         let mut inode = self.get_inode(ino)?;
         let mut inode_modified = false;

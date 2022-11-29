@@ -19,16 +19,16 @@ pub struct FileDiskDriver {
 }
 
 impl FileDiskDriver {
-    fn get_file(self: &mut Self) -> &File {
+    fn get_file(&mut self) -> &File {
         self.file.as_ref().unwrap()
     }
-    fn blank_data(self: &mut Self) -> Vec<u8> {
+    fn blank_data(&mut self) -> Vec<u8> {
         [0 as u8].repeat(self.info.consts.layout_size as usize)
     }
 }
 
 impl DiskDriver for FileDiskDriver {
-    fn ddriver_open(self: &mut Self, path: &str) -> Result<()> {
+    fn ddriver_open(&mut self, path: &str) -> Result<()> {
         info!("FileDrv open: {}", path);
         if !Path::new(path).exists() {
             info!("Create a new file {}", path);
@@ -48,12 +48,12 @@ impl DiskDriver for FileDiskDriver {
         Ok(())
     }
 
-    fn ddriver_close(self: &mut Self) -> Result<()> {
+    fn ddriver_close(&mut self) -> Result<()> {
         self.get_file().flush()?;
         Ok(())
     }
 
-    fn ddriver_seek(self: &mut Self, offset: i64, whence: SeekType) -> Result<u64> {
+    fn ddriver_seek(&mut self, offset: i64, whence: SeekType) -> Result<u64> {
         if whence == SeekType::Set {
             debug!("disk seek to {:x}", offset);
             if offset > self.info.consts.layout_size.into() {
@@ -67,7 +67,7 @@ impl DiskDriver for FileDiskDriver {
         })?)
     }
 
-    fn ddriver_write(self: &mut Self, buf: &[u8], size: usize) -> Result<usize> {
+    fn ddriver_write(&mut self, buf: &[u8], size: usize) -> Result<usize> {
         assert!(buf.len() >= size);
         let offset = self.file.as_ref().unwrap().stream_position().unwrap() as usize;
         debug!("disk write @ {:x} - {:x}", offset, offset + size);
@@ -77,11 +77,11 @@ impl DiskDriver for FileDiskDriver {
         Ok(size)
     }
 
-    fn ddriver_read(self: &mut Self, buf: &mut [u8], size: usize) -> Result<usize> {
+    fn ddriver_read(&mut self, buf: &mut [u8], size: usize) -> Result<usize> {
         Ok(self.get_file().read(&mut buf[..size])?)
     }
 
-    fn ddriver_ioctl(self: &mut Self, cmd: u32, arg: &mut [u8]) -> Result<()> {
+    fn ddriver_ioctl(&mut self, cmd: u32, arg: &mut [u8]) -> Result<()> {
         match cmd {
             IOC_REQ_DEVICE_SIZE => {
                 arg[0..4].copy_from_slice(&self.info.consts.layout_size.to_be_bytes());
@@ -105,7 +105,7 @@ impl DiskDriver for FileDiskDriver {
         }
     }
 
-    fn ddriver_reset(self: &mut Self) -> Result<()> {
+    fn ddriver_reset(&mut self) -> Result<()> {
         self.ddriver_write(&[0].repeat(self.info.consts.layout_size as usize), self.info.consts.layout_size.try_into().unwrap())?;
         // TODO: write superblock to erase all filesystem
         self.info = DiskInfo::default();

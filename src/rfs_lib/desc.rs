@@ -373,7 +373,7 @@ pub enum Ext2FileType {
 }
 
 impl Ext2INode {
-    pub fn to_attr(self: &Self, ino: usize) -> FileAttr {
+    pub fn to_attr(&self, ino: usize) -> FileAttr {
         prv!("to_attr", ino, self);
         let kind = match self.i_mode >> 12 {
             0x1 => FileType::NamedPipe,
@@ -916,9 +916,9 @@ impl Default for Ext2SuperBlock {
 }
 
 impl Ext2SuperBlock {
-    pub fn magic_matched(self: &Self) -> bool { self.s_magic == EXT2_SUPER_MAGIC }
-    pub fn block_size(self: &Self) -> usize { self.block_size_kib() * 0x400 }
-    pub fn block_size_kib(self: &Self) -> usize { 1 << self.s_log_block_size }
+    pub fn magic_matched(&self) -> bool { self.s_magic == EXT2_SUPER_MAGIC }
+    pub fn block_size(&self) -> usize { self.block_size_kib() * 0x400 }
+    pub fn block_size_kib(&self) -> usize { 1 << self.s_log_block_size }
 }
 
 /**
@@ -1040,10 +1040,10 @@ pub struct Ext2DirEntry {
 pub const EXT2_DIR_ENTRY_BASE_SIZE: usize = size_of::<Ext2DirEntry>() - EXT2_NAME_LEN;
 
 impl Ext2DirEntry {
-    pub fn get_name(self: &Self) -> String {
+    pub fn get_name(&self) -> String {
         String::from_utf8_lossy(&self.name[..self.name_len as usize]).to_string()
     }
-    pub fn to_string(self: &Self) -> String {
+    pub fn to_string(&self) -> String {
         format!("{} {} entry size {} name size {}", self.inode,
                 self.get_name(), self.rec_len, self.name_len)
     }

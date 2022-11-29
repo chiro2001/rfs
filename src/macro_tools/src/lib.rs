@@ -41,10 +41,10 @@ pub fn apply_mem_derive(input: TokenStream) -> TokenStream {
     let target_itent = &Ident::new(target, attr.span());
     let gen = quote! {
         impl #name {
-            pub fn apply_to(self: &Self, that: &mut #target_itent) {
+            pub fn apply_to(&self, that: &mut #target_itent) {
                 #(#fields_to)*;
             }
-            pub fn apply_from(self: &mut Self, that: &#target_itent) {
+            pub fn apply_from(&mut self, that: &#target_itent) {
                 #(#fields_from)*;
             }
         }
