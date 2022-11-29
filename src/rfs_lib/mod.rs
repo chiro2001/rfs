@@ -690,7 +690,7 @@ impl RFS {
                     inode_parent = Ext2INode::default();
                     inode_parent.i_size = block_size as u32;
                     inode_parent.i_blocks = 1;
-                    inode_parent.i_mode = (0755 | (file_type << 12)) as u16;
+                    inode_parent.i_mode = (mode | (file_type << 12)) as u16;
                 }
                 let dir_entry_block_data = init_directory(&mut entry, &inode_parent, parent_data_block_free)?;
                 inode_parent = dir_entry_block_data.1;

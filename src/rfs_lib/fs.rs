@@ -235,8 +235,9 @@ impl Filesystem for RFS {
                         self.bitmap_inode.extend_from_slice(&bitmap_inode);
 
                         // create root directory
-                        ret(self.make_node(EXT2_ROOT_INO, "..", 0xfff, Ext2FileType::Directory))?;
-                        ret(self.make_node(EXT2_ROOT_INO, ".", 0xfff, Ext2FileType::Directory))?;
+                        ret(self.make_node(1, "..", 0o755, Ext2FileType::Directory))?;
+                        ret(self.make_node(1, ".", 0o755, Ext2FileType::Directory))?;
+                        ret(self.make_node(EXT2_ROOT_INO, "lost+found", 0o755, Ext2FileType::Directory))?;
                     }
                 }
             }
