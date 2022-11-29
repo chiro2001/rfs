@@ -5,7 +5,7 @@ use std::io::Read;
 use std::mem::size_of;
 use std::path::Path;
 use std::process::Stdio;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub use disk_driver;
 use anyhow::{anyhow, Result};
 use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE, SeekType};
@@ -1075,6 +1075,63 @@ impl RFS {
             }
         }
         Err(anyhow!("file not found"))
+    }
+
+    pub fn rfs_setattr(&mut self, ino: u64, mode: Option<u32>,
+                       uid: Option<u32>, gid: Option<u32>, size: Option<u64>,
+                       atime: Option<SystemTime>, mtime: Option<SystemTime>,
+                       chgtime: Option<SystemTime>,
+                       bkuptime: Option<SystemTime>, flags: Option<u32>) -> Result<Ext2INode> {
+        let ino = RFS::shift_ino(ino as usize);
+        let mut node = self.get_inode(ino)?;
+        match mode {
+            Some(v) => node.i_mode = v as u16,
+            _ => {}
+        };
+        match uid {
+            Some(v) => {
+                node.i_uid = (v & 0xFF) as u16;
+                node.i_uid_high = (v >> 16) as u16;
+            }
+            _ => {}
+        };
+        match gid {
+            Some(v) => {
+                node.i_gid = (v & 0xFF) as u16;
+                node.i_gid_high = (v >> 16) as u16;
+            }
+            _ => {}
+        };
+        match size {
+            Some(v) => {
+                node.i_size = (v & 0xFFFF) as u32;
+                node.i_size_high = (v >> 32) as u32;
+            }
+            _ => {}
+        };
+        match atime {
+            Some(v) => node.i_atime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
+            _ => {}
+        };
+        match mtime {
+            Some(v) => node.i_mtime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
+            _ => {}
+        };
+        match chgtime {
+            Some(v) => node.i_ctime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
+            _ => {}
+        };
+        match bkuptime {
+            // not checked
+            Some(v) => node.i_dtime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
+            _ => {}
+        };
+        match flags {
+            Some(v) => node.i_flags = v,
+            _ => {}
+        };
+        self.set_inode(ino, &node)?;
+        Ok(node)
     }
 }
 

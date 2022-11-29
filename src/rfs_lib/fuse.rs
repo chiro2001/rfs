@@ -53,56 +53,8 @@ impl Filesystem for RFS {
                _crtime: Option<SystemTime>, chgtime: Option<SystemTime>,
                bkuptime: Option<SystemTime>, flags: Option<u32>, reply: ReplyAttr) {
         prv!("setattr", ino, atime, mtime, size);
-        let ino = RFS::shift_ino(ino as usize);
-        rep_mut!(reply, node, self.get_inode(ino));
-        match mode {
-            Some(v) => node.i_mode = v as u16,
-            _ => {}
-        };
-        match uid {
-            Some(v) => {
-                node.i_uid = (v & 0xFF) as u16;
-                node.i_uid_high = (v >> 16) as u16;
-            }
-            _ => {}
-        };
-        match gid {
-            Some(v) => {
-                node.i_gid = (v & 0xFF) as u16;
-                node.i_gid_high = (v >> 16) as u16;
-            }
-            _ => {}
-        };
-        match size {
-            Some(v) => {
-                node.i_size = (v & 0xFFFF) as u32;
-                node.i_size_high = (v >> 32) as u32;
-            }
-            _ => {}
-        };
-        match atime {
-            Some(v) => node.i_atime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
-            _ => {}
-        };
-        match mtime {
-            Some(v) => node.i_mtime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
-            _ => {}
-        };
-        match chgtime {
-            Some(v) => node.i_ctime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
-            _ => {}
-        };
-        match bkuptime {
-            // not checked
-            Some(v) => node.i_dtime = v.duration_since(UNIX_EPOCH).unwrap().as_secs() as u32,
-            _ => {}
-        };
-        match flags {
-            Some(v) => node.i_flags = v,
-            _ => {}
-        };
-        rep!(reply, self.set_inode(ino, &node));
-        let attr = node.to_attr(ino);
+        rep!(reply, node, self.rfs_setattr(ino, mode, uid, gid, size, atime, mtime, chgtime, bkuptime, flags));
+        let attr = node.to_attr(ino as usize);
         reply.attr(&TTL, &attr);
     }
 
