@@ -344,7 +344,7 @@ impl RFS {
             // prv!(i, m, o);
             let o = i * 4;
             buf_u32.copy_from_slice(&data_block[o..o + 4]);
-            let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+            let block = u32::from_be_bytes(buf_u32.clone()) as usize;
             // debug!("buf_u32: {:x?}, block: {:x}", buf_u32, block);
             if L != 1 {
                 if L == 3 {
@@ -386,7 +386,7 @@ impl RFS {
                 if !self.walk_blocks::<$l, F>(inode.i_block[11 + $l] as usize, $start, 1, f)? { return Ok(()); };
             };
         }
-        warn!("i_blocks[12, 13, 14] = {}, {}, {}", inode.i_block[12], inode.i_block[13], inode.i_block[14]);
+        debug!("i_blocks[12, 13, 14] = {}, {}, {}", inode.i_block[12], inode.i_block[13], inode.i_block[14]);
         // if block_index < self.threshold(0) {
         for i in block_index..self.threshold(0) {
             if inode.i_block[i] == 0 || !f(inode.i_block[i] as usize, i)? { return Ok(()); }
@@ -487,10 +487,10 @@ impl RFS {
             loop {
                 let layer_slice = &mut layer_data[0][offset..offset + 4];
                 buf_u32.copy_from_slice(layer_slice);
-                let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+                let block = u32::from_be_bytes(buf_u32.clone()) as usize;
                 let r = f(block, i)?;
                 if r.1 {
-                    let new_block = self.allocate_block()?;
+                    let new_block = self.allocate_block()? as u32;
                     layer_slice.copy_from_slice(&new_block.to_be_bytes());
                     layer_modified[0] = false;
                 } else {
@@ -510,7 +510,7 @@ impl RFS {
             }
             let offset = ((i - self.threshold(1)) << 2) / layer_size;
             buf_u32.copy_from_slice(&layer_data[0][offset..offset + 4]);
-            let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+            let block = u32::from_be_bytes(buf_u32.clone()) as usize;
 
             for j in i..i + layer_size {
                 if block_index > j { continue; }
@@ -522,7 +522,7 @@ impl RFS {
                 }
                 let offset = ((j - 12) % layer_size) << 2;
                 buf_u32.copy_from_slice(&layer_data[1][offset..offset + 4]);
-                let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+                let block = u32::from_be_bytes(buf_u32.clone()) as usize;
                 let r = f(block, j)?;
                 if !r.0 { return Ok(()); }
             }
@@ -541,7 +541,7 @@ impl RFS {
             }
             let offset = ((i - self.threshold(1)) << 2) / layer_size;
             buf_u32.copy_from_slice(&layer_data[0][offset..offset + 4]);
-            let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+            let block = u32::from_be_bytes(buf_u32.clone()) as usize;
 
             for j in i..i + layer_size * layer_size {
                 if block_index > j { continue; }
@@ -552,7 +552,7 @@ impl RFS {
                 }
                 let offset = (((j - 12) % layer_size) / layer_size) << 2;
                 buf_u32.copy_from_slice(&layer_data[1][offset..offset + 4]);
-                let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+                let block = u32::from_be_bytes(buf_u32.clone()) as usize;
 
                 for k in j..j + layer_size {
                     if block_index > k { continue; }
@@ -563,7 +563,7 @@ impl RFS {
                     }
                     let offset = ((k - 12) % layer_size) << 2;
                     buf_u32.copy_from_slice(&layer_data[2][offset..offset + 4]);
-                    let block = u32::from_le_bytes(buf_u32.clone()) as usize;
+                    let block = u32::from_be_bytes(buf_u32.clone()) as usize;
 
                     let r = f(block, k)?;
                     if !r.0 { return Ok(()); }
@@ -637,7 +637,7 @@ impl RFS {
         let block_size = self.block_size();
         let mut init_directory = |entry: &mut Ext2DirEntry, inode: &Ext2INode, data_block_free: usize|
                                   -> Result<(Vec<u8>, Ext2INode)> {
-            warn!("init_directory for ino {}", ino_free);
+            debug!("init_directory for ino {}", ino_free);
             let mut inode = inode.clone();
             inode.i_blocks = 1;
             inode.i_size = block_size as u32;
@@ -684,7 +684,7 @@ impl RFS {
         };
         if last_block_i == usize::MAX {
             if node_type == Ext2FileType::Directory {
-                warn!("parent inode data block is empty, creating a block for this directory");
+                debug!("parent inode data block is empty, creating a block for this directory");
                 let parent_data_block_free = self.allocate_block()?;
                 if inode_parent.i_blocks == 0 && inode_parent.i_size == 0 && inode_parent.i_mode == 0 {
                     debug!("inode_parent is empty, use default value");
@@ -695,7 +695,7 @@ impl RFS {
                 }
                 let dir_entry_block_data = init_directory(&mut entry, &inode_parent, parent_data_block_free)?;
                 inode_parent = dir_entry_block_data.1;
-                warn!("after update, inode parent: {:?}", inode_parent);
+                debug!("after update, inode parent: {:?}", inode_parent);
                 self.write_data_block(parent_data_block_free, &dir_entry_block_data.0)?;
                 last_block_i = 0;
             } else {
@@ -787,7 +787,7 @@ impl RFS {
                 debug!("set self size to one block...");
                 let dir_entry_block_data = init_directory(&mut entry, &inode, data_block_free)?;
                 inode = dir_entry_block_data.1;
-                warn!("after update, inode: {:?}; ready to write block: {}", inode, data_block_free);
+                debug!("after update, inode: {:?}; ready to write block: {}", inode, data_block_free);
                 self.write_data_block(data_block_free, &dir_entry_block_data.0)?;
             }
             Ext2FileType::RegularFile => {
