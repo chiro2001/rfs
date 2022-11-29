@@ -9,6 +9,7 @@ use disk_driver::{DiskDriver, DiskInfo, SeekType};
 use log::*;
 use num::range_step;
 
+#[macro_use]
 pub mod utils;
 pub mod desc;
 pub mod types;
@@ -231,12 +232,12 @@ impl RFS {
             if dir.inode == 0 || dir.inode >= self.super_block.s_inodes_count || dir.rec_len == 0 {
                 break;
             }
-            info!("[p {:x}] name_len = {}, rec_len = {}", p, dir.name_len, dir.rec_len);
+            debug!("[p {:x}] name_len = {}, rec_len = {}", p, dir.name_len, dir.rec_len);
             p += dir.rec_len as usize;
-            info!("next p: {:x}; dir: {}", p, dir.to_string());
+            debug!("next p: {:x}; dir: {}", p, dir.to_string());
             dirs.push(dir);
         }
-        if !dirs.is_empty() { info!("last dir entry: {} {:?}", dirs.last().unwrap().to_string(), dirs.last().unwrap()); }
+        if !dirs.is_empty() { debug!("last dir entry: {} {:?}", dirs.last().unwrap().to_string(), dirs.last().unwrap()); }
         Ok(dirs)
     }
 
@@ -508,6 +509,122 @@ impl RFS {
         let index = if index == 0 { 0 } else { index - 1 };
         let b = bitmap[index / 8] | (1 << (index % 8));
         bitmap[index / 8] = b;
+    }
+
+    pub fn make_node(&mut self, parent: usize, name: &str,
+                     mode: usize, node_type: Ext2FileType) -> Result<()> {
+        let mut inode_parent = self.get_inode(parent as usize)?;
+        // search inode bitmap for free inode
+        let mut ino_free = Self::bitmap_search(&self.bitmap_inode)?;
+        // ino_free += 1;
+        Self::bitmap_set(&mut self.bitmap_inode, ino_free);
+        // save bitmap
+        let bitmap_block = self.get_group_desc().bg_inode_bitmap as usize;
+        let bitmap_clone = self.bitmap_inode.clone();
+        self.write_data_block(bitmap_block, &bitmap_clone)?;
+
+        // create entry and inode
+        let mut entry = Ext2DirEntry::new_file(name, ino_free);
+        let mut inode = Ext2INode::default();
+        entry.inode = ino_free as u32;
+        debug!("entry use new ino {}", ino_free);
+        inode.i_mode = (mode & 0xFFF) as u16 | ((node_type.try_into().unwrap()) << 12) as u16;
+        // append to parent dir entry
+        let mut last_block_i = usize::MAX;
+        for (i, d) in inode_parent.i_block.iter().enumerate() {
+            if *d != 0 { last_block_i = i; }
+        }
+        if last_block_i == usize::MAX {
+            panic!("data block is empty");
+        }
+        // TODO layer 1-3 support
+        assert!(!(last_block_i == 12 || last_block_i == 13 || last_block_i == 14));
+        // read parent dir
+        let mut parent_enties = self.get_block_dir_entries(inode_parent.i_block[last_block_i] as usize)?;
+        let mut entries_lengths: Vec<usize> = parent_enties.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
+        let mut offset_cnt = 0 as usize;
+        let mut reset_last_rec_len = false;
+        for (i, len) in entries_lengths.iter().enumerate() {
+            if i != entries_lengths.len() - 1 {
+                offset_cnt += len;
+            } else {
+                // last entry may have a large rec_len
+                // calculate real size
+                if *len as i64 - (8 + parent_enties[i].name_len) as i64 >= entry.rec_len as i64 {
+                    reset_last_rec_len = true;
+                    offset_cnt += parent_enties[i].name_len as usize + 8;
+                } else {
+                    offset_cnt += len;
+                }
+            }
+        }
+        prv!(entries_lengths, offset_cnt);
+        if offset_cnt + entry.rec_len as usize >= self.block_size() {
+            debug!("offset overflow! old last_block_i: {}, block: {}", last_block_i, inode_parent.i_block[last_block_i]);
+            // append block index and load next block
+            assert_ne!(last_block_i, 11);
+            last_block_i += 1;
+            let block_free = Self::bitmap_search(&self.bitmap_data)?;
+            Self::bitmap_set(&mut self.bitmap_data, block_free);
+            // save bitmap
+            let bitmap_block = self.get_group_desc().bg_block_bitmap as usize;
+            let bitmap_clone = self.bitmap_inode.clone();
+            self.write_data_block(bitmap_block, &bitmap_clone)?;
+            inode_parent.i_block[last_block_i] = block_free as u32;
+            // reload parent_dir
+            let parent_enties_2 = self.get_block_dir_entries(block_free)?;
+            parent_enties = parent_enties_2;
+            entries_lengths = parent_enties.iter().map(|e| e.rec_len as usize).collect();
+            offset_cnt = 0;
+            reset_last_rec_len = false;
+            for len in entries_lengths { offset_cnt += len; }
+        }
+        debug!("parent inode blocks: {:x?}", inode_parent.i_block);
+        debug!("write entry to buf, rec_len = {}", entry.rec_len);
+        let mut data_block = self.create_block_vec();
+        // self.read_block(&mut data_block)?;
+        self.read_data_block(inode_parent.i_block[last_block_i] as usize, &mut data_block)?;
+        warn!("original data_block:");
+        show_hex_debug(&data_block[..0x50], 0x10);
+        if reset_last_rec_len {
+            debug!("write back modified parent entries");
+            let parent_entries_tail = parent_enties.len() - 1;
+            let mut parent_entries_last = parent_enties[parent_entries_tail].clone();
+            debug!("parent_entries_last: {} {:?}", parent_entries_last.to_string(), parent_entries_last);
+            let parent_entries_last_rec_len_old = parent_entries_last.rec_len as usize;
+            let offset_start = self.block_size() - parent_entries_last_rec_len_old;
+            parent_entries_last.rec_len = (up_align((parent_entries_last.name_len + 8) as usize, 4)) as u16;
+            debug!("parent_entries_last updated: {} {:?}", parent_entries_last.to_string(), parent_entries_last);
+            let parent_entries_last_data = unsafe { serialize_row(&parent_entries_last) };
+            // data_block[offset_cnt - parent_entries_last_rec_len_old as usize..offset_cnt + (parent_entries_last.rec_len - parent_entries_last_rec_len_old) as usize]
+            //     .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
+            let offset_next = offset_start + parent_entries_last.rec_len as usize;
+            warn!("data_block update: [{:x}..{:x}]", offset_start, offset_next);
+            data_block[offset_start..offset_next]
+                .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
+            // offset_cnt = up_align(offset_cnt, 4);
+            warn!("data_block after update:");
+            show_hex_debug(&data_block[..0x50], 0x10);
+            offset_cnt = offset_next;
+        }
+        let old_rec_len = entry.rec_len;
+        let offset_next = offset_cnt + old_rec_len as usize;
+        entry.rec_len = (self.block_size() - offset_cnt) as u16;
+        debug!("new entry to write: {} {:?}", entry.to_string(), entry);
+        let entry_data = unsafe { serialize_row(&entry) };
+        warn!("update data_block for entry_data: [{:x}..{:x}]", offset_cnt, offset_next);
+        data_block[offset_cnt..offset_next].copy_from_slice(&entry_data[..old_rec_len as usize]);
+        warn!("data_block to write:");
+        show_hex_debug(&data_block[..0x50], 0x10);
+        debug!("write back buf block: {}", inode_parent.i_block[last_block_i]);
+        self.write_data_block(inode_parent.i_block[last_block_i] as usize, &data_block)?;
+        let attr = inode.to_attr(ino_free);
+        debug!("file {} == {} created! attr: {:?}", name, entry.get_name(), attr);
+        debug!("write new inode: [{}] {:?}", ino_free, inode);
+        self.set_inode(ino_free, &inode)?;
+        debug!("write parent inode: [{}] {:?}", parent, inode_parent);
+        self.set_inode(parent as usize, &inode_parent)?;
+        Ok(())
     }
 }
 
