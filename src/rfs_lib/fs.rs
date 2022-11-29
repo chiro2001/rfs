@@ -11,7 +11,7 @@ use execute::Execute;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
 use libc::ENOENT;
 use log::*;
-use crate::{FORCE_FORMAT, prv, rep, rep_mut};
+use crate::{DEVICE_FILE, FORCE_FORMAT, prv, rep, rep_mut};
 use crate::rfs_lib::desc::{EXT2_ROOT_INO, Ext2GroupDesc, Ext2INode,
                            Ext2SuperBlock, Ext2FileType};
 use crate::rfs_lib::{TTL, RFS};
@@ -19,8 +19,8 @@ use crate::rfs_lib::utils::*;
 
 impl Filesystem for RFS {
     fn init(&mut self, _req: &Request<'_>) -> Result<(), c_int> {
-        let file = "disk";
-        ret(self.driver.ddriver_open(file))?;
+        let file = DEVICE_FILE.read().unwrap().clone();
+        ret(self.driver.ddriver_open(&file))?;
         // get and check size
         let mut buf = [0 as u8; 4];
         ret(self.driver.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf))?;
@@ -82,7 +82,7 @@ impl Filesystem for RFS {
             info!("{}", String::from_utf8(output.stdout).unwrap());
             // reload disk driver
             ret(self.driver.ddriver_close())?;
-            ret(self.driver.ddriver_open(file))?;
+            ret(self.driver.ddriver_open(&file))?;
             ret(self.seek_block(0))?;
             ret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
             super_block = unsafe { deserialize_row(&data_blocks_head) };

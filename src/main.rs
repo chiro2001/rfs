@@ -12,7 +12,7 @@ use nix::sys::signal;
 use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
 use log::*;
-use rfs::{FORCE_FORMAT, MOUNT_POINT, RFS};
+use rfs::{DEVICE_FILE, FORCE_FORMAT, MOUNT_POINT, RFS};
 
 mod rfs_lib;
 mod hello;
@@ -45,6 +45,7 @@ fn main() -> Result<()> {
     let abspath_mountpoint = path_mountpoint.to_str().unwrap();
     // let abspath_device = path_device.to_str().unwrap();
     info!("Device: {}", device);
+    DEVICE_FILE.set(device.clone()).unwrap();
 
     MOUNT_POINT.set(abspath_mountpoint.clone().to_string()).unwrap();
     FORCE_FORMAT.set(matches.get_flag("format")).unwrap();
