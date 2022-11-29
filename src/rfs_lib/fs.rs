@@ -192,7 +192,7 @@ impl Filesystem for RFS {
                atime: Option<SystemTime>, mtime: Option<SystemTime>, _fh: Option<u64>,
                _crtime: Option<SystemTime>, chgtime: Option<SystemTime>,
                bkuptime: Option<SystemTime>, flags: Option<u32>, reply: ReplyAttr) {
-        prv!("setattr", ino, atime, mtime);
+        prv!("setattr", ino, atime, mtime, size);
         let ino = RFS::shift_ino(ino);
         rep_mut!(reply, node, self.get_inode(ino));
         match mode {
@@ -312,7 +312,7 @@ impl Filesystem for RFS {
         let size = data.len() as usize;
         prv!("write", ino, offset, size);
         debug!("#write: offset = {:x}, size = {:x}", offset, size);
-        let offset = offset as usize;
+        let mut offset = offset as usize;
         let base = offset;
         let sz = self.block_size();
         let ino = RFS::shift_ino(ino);
@@ -353,8 +353,11 @@ impl Filesystem for RFS {
             // if i * sz >= size { break; }
             let right = min((i + 1) * sz, size);
             rep!(reply, self.write_data_block(*block, &data[(i * sz)..right]));
+            offset += right - (i * sz);
         }
-        reply.written((offset - base) as u32);
+        let written = offset - base;
+        debug!("#write: reply written = {}", written);
+        reply.written(written as u32);
     }
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
