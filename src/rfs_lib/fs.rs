@@ -259,12 +259,12 @@ impl Filesystem for RFS {
         self.bitmap_inode.clear();
         self.bitmap_inode.extend_from_slice(&bitmap_inode);
 
-        let reserved_blocks = 1 + 1 + 1 + 1 + 1 + super_block.s_inodes_count as usize / size_of::<Ext2INode>() + 1;
-        loop {
-            let block = ret(self.allocate_block())?;
-            debug!("allocate reserved block: {}", block);
-            if block > reserved_blocks { break; }
-        }
+        // let reserved_blocks = 1 + 1 + 1 + 1 + 1 + super_block.s_inodes_count as usize / size_of::<Ext2INode>() + 1;
+        // loop {
+        //     let block = ret(self.allocate_block())?;
+        //     debug!("allocate reserved block: {}", block);
+        //     if block > reserved_blocks { break; }
+        // }
 
         // load root dir
         self.root_dir = ret(self.get_inode(EXT2_ROOT_INO))?;

@@ -582,8 +582,8 @@ impl RFS {
         ino as usize
     }
 
-    pub fn bitmap_search(bitmap: &[u8]) -> Result<usize> {
-        for (i, byte) in bitmap.iter().enumerate() {
+    pub fn bitmap_search(bitmap: &[u8], reserved: usize) -> Result<usize> {
+        for (i, byte) in bitmap.iter().enumerate().skip(reserved) {
             let b = *byte;
             for j in 0..8 {
                 if (b >> j) & 0x1 == 0 {
@@ -806,7 +806,10 @@ impl RFS {
 
     fn allocate_bitmap(&mut self, bitmap_block: usize, is_data: bool) -> Result<usize> {
         let bitmap = if is_data { &mut self.bitmap_data } else { &mut self.bitmap_inode };
-        let block_free = Self::bitmap_search(bitmap)?;
+        let reserved_blocks = 1 + 1 + 1 + 1 + 1 + self.super_block.s_inodes_count as usize / size_of::<Ext2INode>() + 1;
+        let block_free = Self::bitmap_search(bitmap, if is_data {
+            reserved_blocks
+        } else { self.super_block.s_first_ino as usize + 1 })?;
         Self::bitmap_set(bitmap, block_free);
         // save bitmap
         let bitmap_clone: Vec<u8> = bitmap.clone();
