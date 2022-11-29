@@ -8,7 +8,6 @@ use std::os::raw::c_int;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
-use chrono::Local;
 use disk_driver::{IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use execute::Execute;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyWrite, Request};
@@ -138,7 +137,6 @@ impl Filesystem for RFS {
                             };
                             let name = &s[..s.find("(").unwrap()];
                             debug!("{} = {}", name, v);
-                            let sz = layout.block_size;
                             match name {
                                 "boot" => {
                                     layout.boot = true;
@@ -203,7 +201,7 @@ impl Filesystem for RFS {
                         let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
                         debug!("block bitmap at {} block", bg_block_bitmap);
                         ret(self.seek_block(bg_block_bitmap))?;
-                        let mut bitmap_data_block = self.create_block_vec();
+                        let bitmap_data_block = self.create_block_vec();
                         ret(self.write_block(&bitmap_data_block))?;
                         self.bitmap_data.clear();
                         self.bitmap_data.extend_from_slice(&bitmap_data_block);
@@ -211,7 +209,7 @@ impl Filesystem for RFS {
                         let bg_inode_bitmap = self.get_group_desc().bg_inode_bitmap as usize;
                         debug!("inode bitmap at {} block", bg_inode_bitmap);
                         ret(self.seek_block(bg_inode_bitmap))?;
-                        let mut bitmap_inode = self.create_block_vec();
+                        let bitmap_inode = self.create_block_vec();
                         ret(self.write_block(&bitmap_inode))?;
                         self.bitmap_inode.clear();
                         self.bitmap_inode.extend_from_slice(&bitmap_inode);
@@ -386,7 +384,7 @@ impl Filesystem for RFS {
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
         prv!("read", ino, offset, size);
         debug!("#read: offset = {:x}, size = {:x}", offset, size);
-        let offset = offset as usize;
+        let mut offset = offset as usize;
         let size = size as usize;
         let sz = self.block_size();
         let ino = RFS::shift_ino(ino);
@@ -422,7 +420,6 @@ impl Filesystem for RFS {
             Ok((will_continue, false))
         }));
         let mut data: Vec<u8> = [0 as u8].repeat(size);
-        let mut offset = offset;
         for (i, block) in blocks.iter().enumerate() {
             // if i * sz >= size { break; }
             let right = min((i + 1) * sz, size);
@@ -475,7 +472,6 @@ impl Filesystem for RFS {
             last_block = block;
             Ok((will_continue, false))
         }));
-        let mut offset_write = 0 as usize;
         for (i, block) in blocks.iter().enumerate() {
             // if i * sz >= size { break; }
             let right = min((i + 1) * sz, size);

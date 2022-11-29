@@ -305,6 +305,7 @@ impl RFS {
         }
     }
 
+    #[allow(dead_code)]
     pub fn threshold_diff(self: &Self, l: usize) -> usize {
         let layer = self.block_size() / 4;
         match l {
@@ -317,6 +318,7 @@ impl RFS {
     }
 
     /// Walk on *ONE* Layer
+    #[allow(dead_code)]
     pub fn walk_blocks<const L: usize, F>(self: &mut Self, start_block: usize, block_index: usize, s: usize, mut f: &mut F) -> Result<bool>
         where F: FnMut(usize, usize) -> Result<bool> {
         debug!("walk_blocks<{}>(start_block={}, block_index={})", L, start_block, block_index);
@@ -373,6 +375,7 @@ impl RFS {
     }
 
     /// Walk for ino
+    #[allow(dead_code)]
     pub fn walk_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
         where F: FnMut(usize, usize) -> Result<bool> {
         let inode = self.get_inode(ino)?;
@@ -394,7 +397,7 @@ impl RFS {
         // continue
         visit_layer!(1);
         visit_layer!(2);
-        panic!("L3");
+        // panic!("L3");
         visit_layer!(3);
         // } else if block_index < self.threshold(1) {
         //     // debug!("START from layer 1");
@@ -530,7 +533,7 @@ impl RFS {
         dump_index_table!(0);
         dump_index_table!(1);
         // 14 -> L3
-        panic!("L3");
+        // panic!("L3");
         // TODO: L3, bigger file will be not found
         debug!("L3 base block: {:x?}", inode.i_block);
         for i in range_step(self.threshold(2), self.threshold(3), layer_size * layer_size) {
@@ -635,7 +638,7 @@ impl RFS {
             if *d != 0 { last_block_i = i; }
         }
         let block_size = self.block_size();
-        let mut init_directory = |entry: &mut Ext2DirEntry, inode: &Ext2INode, data_block_free: usize|
+        let init_directory = |entry: &mut Ext2DirEntry, inode: &Ext2INode, data_block_free: usize|
                                   -> Result<(Vec<u8>, Ext2INode)> {
             debug!("init_directory for ino {}", ino_free);
             let mut inode = inode.clone();
