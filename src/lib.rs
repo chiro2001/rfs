@@ -11,4 +11,5 @@ lazy_static! {
     pub static ref MOUNT_POINT: MutStatic<String> = MutStatic::new();
     pub static ref DEVICE_FILE: MutStatic<String> = MutStatic::new();
     pub static ref FORCE_FORMAT: MutStatic<bool> = MutStatic::new();
+    pub static ref MKFS_FORMAT: MutStatic<bool> = MutStatic::new();
 }

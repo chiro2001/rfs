@@ -1,8 +1,11 @@
 use std::cmp::min;
 /// FUSE operations.
 use std::ffi::OsStr;
+use std::fs::File;
+use std::io::Read;
 use std::mem::size_of;
 use std::os::raw::c_int;
+use std::path::Path;
 use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::Local;
@@ -11,9 +14,9 @@ use execute::Execute;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyWrite, Request};
 use libc::ENOENT;
 use log::*;
-use crate::{DEVICE_FILE, FORCE_FORMAT, prv, rep, rep_mut};
+use crate::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, prv, rep, rep_mut};
 use crate::rfs_lib::desc::{EXT2_ROOT_INO, Ext2GroupDesc, Ext2INode,
-                           Ext2SuperBlock, Ext2FileType};
+                           Ext2SuperBlock, Ext2FileType, FsLayoutArgs};
 use crate::rfs_lib::{TTL, RFS};
 use crate::rfs_lib::utils::*;
 
@@ -75,35 +78,153 @@ impl Filesystem for RFS {
             let dt = Local::now();
             super_block.s_wtime = dt.timestamp_millis() as u32;
             info!("total {} blocks", block_count);
-            // TODO: create layout
-            // let's use mkfs.ext2
-            // create file
-            let mut command = execute::command_args!("dd", format!("of={}", file), "if=/dev/zero",
+            let mkfs = MKFS_FORMAT.read().unwrap().clone();
+            if mkfs {
+                // let's use mkfs.ext2
+                // create file
+                let mut command = execute::command_args!("dd", format!("of={}", file), "if=/dev/zero",
                 format!("bs={}", self.disk_block_size()),
                 format!("count={}", self.disk_size() / self.disk_block_size()));
-            command.stdout(Stdio::piped());
-            let output = command.execute_output().unwrap();
-            info!("{}", String::from_utf8(output.stdout).unwrap());
-            // use version 0
-            let mut command = execute::command_args!("mkfs.ext2", file, "-t", "ext2", "-r", "0");
-            command.stdout(Stdio::piped());
-            let output = command.execute_output().unwrap();
-            info!("{}", String::from_utf8(output.stdout).unwrap());
-            // reload disk driver
-            ret(self.driver.ddriver_open(&file))?;
-            ret(self.seek_block(0))?;
-            ret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
-            super_block = unsafe { deserialize_row(&data_blocks_head) };
-            if !super_block.magic_matched() {
+                command.stdout(Stdio::piped());
+                let output = command.execute_output().unwrap();
+                info!("{}", String::from_utf8(output.stdout).unwrap());
+                // use version 0
+                let mut command = execute::command_args!("mkfs.ext2", file, "-t", "ext2", "-r", "0");
+                command.stdout(Stdio::piped());
+                let output = command.execute_output().unwrap();
+                info!("{}", String::from_utf8(output.stdout).unwrap());
+                // reload disk driver
+                ret(self.driver.ddriver_open(&file))?;
+                ret(self.seek_block(0))?;
                 ret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
                 super_block = unsafe { deserialize_row(&data_blocks_head) };
-            }
-            if super_block.magic_matched() {
-                self.filesystem_first_block = 1;
-                info!("Disk driver reloaded.");
+                if !super_block.magic_matched() {
+                    ret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
+                    super_block = unsafe { deserialize_row(&data_blocks_head) };
+                }
+                if super_block.magic_matched() {
+                    self.filesystem_first_block = 1;
+                    info!("Disk driver reloaded.");
+                } else {
+                    error!("Make filesystem failed!");
+                    return Err(1);
+                }
             } else {
-                error!("Make filesystem failed!");
-                return Err(1);
+                // use manual fs layout
+                let default_layout_str = "
+| BSIZE = 1024 B |
+| Boot(1) | Super(1) | GroupDesc(1) | DATA Map(1) | Inode Map(1) | Inode Table(128) | DATA(*) |";
+                debug!("loading fs.layout...");
+                let path = Path::new("include/fs.layout");
+                let mut layout_string = default_layout_str.to_string();
+                if path.exists() {
+                    let mut file = File::open(path).unwrap();
+                    let mut data = vec![];
+                    file.read_to_end(&mut data).unwrap();
+                    layout_string = String::from_utf8(data).unwrap();
+                }
+                let lines = layout_string.lines();
+                let mut layout = FsLayoutArgs::default();
+                for line in lines {
+                    if line.is_empty() || !line.starts_with("|") { continue; }
+                    let line = line.to_lowercase();
+                    if line.contains("bsize") {
+                        let splits = line.split(" ").collect::<Vec<&str>>();
+                        // debug!("split = {:?}", splits);
+                        let n = splits[3];
+                        // debug!("split n = {}", n);
+                        layout.block_size = str::parse::<usize>(n).unwrap();
+                        info!("block_size = {}", layout.block_size);
+                    } else {
+                        let splits = line.split("|")
+                            .map(|x| x.trim())
+                            .filter(|x| x.len() > 0)
+                            .filter(|x| x.contains("("))
+                            .collect::<Vec<&str>>();
+                        debug!("splits: {:?}", splits);
+                        let mut offset_block = 0;
+                        for s in splits {
+                            let v = if s.contains("*") {
+                                0 as usize
+                            } else {
+                                str::parse::<usize>(&s[s.find("(").unwrap() + 1..s.len() - 1]).unwrap()
+                            };
+                            let name = &s[..s.find("(").unwrap()];
+                            debug!("{} = {}", name, v);
+                            let sz = layout.block_size;
+                            match name {
+                                "boot" => {
+                                    layout.boot = true;
+                                    offset_block += 1;
+                                }
+                                "super" => {
+                                    layout.super_block = offset_block;
+                                    offset_block += v;
+                                }
+                                "groupdesc" => {
+                                    layout.group_desc = offset_block;
+                                    offset_block += v;
+                                }
+                                "data map" => {
+                                    layout.data_map = offset_block;
+                                    offset_block += 1;
+                                }
+                                "inode map" => {
+                                    layout.inode_map = offset_block;
+                                    offset_block += 1;
+                                }
+                                "inode table" => {
+                                    layout.inode_table = offset_block;
+                                    layout.inode_count = v * (layout.block_size / size_of::<Ext2INode>());
+                                    offset_block += v;
+                                }
+                                "data" => {}
+                                _ => {
+                                    warn!("unused layout option: {} = {}", name, v)
+                                }
+                            };
+                        }
+                        layout.block_count = self.disk_size() / layout.block_size;
+                        info!("read fs.layout: {:#?}", layout);
+                        let super_block = Ext2SuperBlock::from(layout.clone());
+                        let group = Ext2GroupDesc::from(layout.clone());
+                        // apply settings, enable functions
+                        self.filesystem_first_block = if layout.boot { 1 } else { 0 };
+                        self.super_block.apply_from(&super_block);
+                        self.group_desc_table.clear();
+                        self.group_desc_table.push(group);
+                        ret(self.seek_block(0))?;
+                        if layout.boot { ret(self.seek_block(1))?; }
+                        // write super_block
+                        let mut block_data = self.create_block_vec();
+                        block_data[..size_of::<Ext2SuperBlock>()].copy_from_slice(unsafe { serialize_row(&super_block) });
+                        ret(self.write_block(&block_data))?;
+                        ret(self.seek_block(self.super_block.s_first_data_block as usize + self.filesystem_first_block))?;
+                        let mut block_data = self.create_block_vec();
+                        block_data[..size_of::<Ext2GroupDesc>()].copy_from_slice(unsafe { serialize_row(&self.group_desc_table[0]) });
+                        ret(self.write_block(&block_data))?;
+
+                        let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;
+                        debug!("block bitmap at {} block", bg_block_bitmap);
+                        ret(self.seek_block(bg_block_bitmap))?;
+                        let mut bitmap_data_block = self.create_block_vec();
+                        ret(self.write_block(&bitmap_data_block))?;
+                        self.bitmap_data.clear();
+                        self.bitmap_data.extend_from_slice(&bitmap_data_block);
+
+                        let bg_inode_bitmap = self.get_group_desc().bg_inode_bitmap as usize;
+                        debug!("inode bitmap at {} block", bg_inode_bitmap);
+                        ret(self.seek_block(bg_inode_bitmap))?;
+                        let mut bitmap_inode = self.create_block_vec();
+                        ret(self.write_block(&bitmap_inode))?;
+                        self.bitmap_inode.clear();
+                        self.bitmap_inode.extend_from_slice(&bitmap_inode);
+
+                        // create root directory
+                        ret(self.make_node(EXT2_ROOT_INO, ".", 0xfff, Ext2FileType::Directory))?;
+                        ret(self.make_node(EXT2_ROOT_INO, "..", 0xfff, Ext2FileType::Directory))?;
+                    }
+                }
             }
         } else {
             info!("FileSystem found!");

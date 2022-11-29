@@ -88,7 +88,7 @@ struct Ext2AclEntry /* Access Control List Entry */
 /**
  * Structure of a blocks group descriptor
  */
-#[derive(Debug, Default)]
+#[derive(Debug)]
 #[repr(C, align(2))]
 pub struct Ext2GroupDesc {
     ///   Blocks bitmap block 
@@ -114,6 +114,39 @@ pub struct Ext2GroupDesc {
     pub bg_itable_unused: u16,
     ///   crc16(s_uuid+group_num+group_desc)
     pub bg_checksum: u16,
+}
+
+impl Default for Ext2GroupDesc {
+    fn default() -> Self {
+        Self {
+            bg_block_bitmap: 3,
+            bg_inode_bitmap: 4,
+            bg_inode_table: 5,
+            bg_free_blocks_count: 0xf6e,
+            bg_free_inodes_count: 0x3f5,
+            bg_used_dirs_count: 2,
+            bg_flags: 4,
+            bg_exclude_bitmap_lo: 0,
+            bg_block_bitmap_csum_lo: 0,
+            bg_inode_bitmap_csum_lo: 0,
+            bg_itable_unused: 0,
+            bg_checksum: 0,
+        }
+    }
+}
+
+impl From<FsLayoutArgs> for Ext2GroupDesc {
+    fn from(l: FsLayoutArgs) -> Self {
+        Self {
+            bg_inode_bitmap: l.inode_map as u32,
+            bg_block_bitmap: l.data_map as u32,
+            bg_inode_table: l.inode_table as u32,
+            bg_free_blocks_count: l.block_count as u16,
+            bg_free_inodes_count: l.inode_count as u16,
+            bg_used_dirs_count: 0,
+            ..Self::default()
+        }
+    }
 }
 
 ///   Inode table/bitmap not initialized 
@@ -733,6 +766,46 @@ pub fn create_uuid() -> [u8; 16] {
     (0..16).map(|_| { rng.gen::<u8>() }).collect::<Vec<u8>>().try_into().unwrap()
 }
 
+impl Ext2SuperBlock {
+    pub fn new(s_inodes_count: u32, s_blocks_count: u32, s_first_data_block: u32,
+               s_log_block_size: u32) -> Self {
+        Self {
+            s_inodes_count, s_blocks_count, s_first_data_block,
+            s_log_block_size, s_inodes_per_group: s_inodes_count,
+            ..Self::default()
+        }
+    }
+}
+
+/// This struct records offsets
+#[derive(Debug, Default, Clone)]
+pub struct FsLayoutArgs {
+    pub block_count: usize,
+    pub block_size: usize,
+    // if has boot block
+    pub boot: bool,
+    // offsets
+    pub super_block: usize,
+    pub group_desc: usize,
+    pub data_map: usize,
+    pub inode_map: usize,
+    pub inode_table: usize,
+    pub inode_count: usize,
+}
+
+impl From<FsLayoutArgs> for Ext2SuperBlock {
+    fn from(l: FsLayoutArgs) -> Self {
+        Self::new(l.inode_count as u32, l.block_count as u32,
+        if l.block_size < 2 * 0x400 { 1 } else { 0 },
+        match l.block_size {
+            1024 => 0,
+            2048 => 1,
+            4096 => 2,
+            _ => panic!("unsupported block size")
+        })
+    }
+}
+
 impl Default for Ext2SuperBlock {
     fn default() -> Self {
         Self {
@@ -748,21 +821,21 @@ impl Default for Ext2SuperBlock {
             s_clusters_per_group: 8192,
             s_inodes_per_group: 1024,
             s_mtime: 0,
-            s_wtime: 1669521656,
+            s_wtime: get_time_now(),
             s_mnt_count: 0,
             s_max_mnt_count: 65535,
-            s_magic: 61267,
+            s_magic: EXT2_SUPER_MAGIC,
             s_state: 1,
             s_errors: 1,
             s_minor_rev_level: 0,
-            s_lastcheck: 1669521656,
+            s_lastcheck: get_time_now(),
             s_checkinterval: 0,
             s_creator_os: 0,
             s_rev_level: 1,
             s_def_resuid: 0,
             s_def_resgid: 0,
             s_first_ino: 11,
-            s_inode_size: 256,
+            s_inode_size: size_of::<Ext2INode>() as u16,
             s_block_group_nr: 0,
             s_feature_compat: 56,
             s_feature_incompat: 2,
@@ -784,7 +857,7 @@ impl Default for Ext2SuperBlock {
             s_desc_size: 0,
             s_default_mount_opts: 12,
             s_first_meta_bg: 0,
-            s_mkfs_time: 1669521656,
+            s_mkfs_time: get_time_now(),
             s_jnl_blocks: [0; 17],
             s_blocks_count_hi: 0,
             s_r_blocks_count_hi: 0,
@@ -844,7 +917,8 @@ impl Default for Ext2SuperBlock {
 
 impl Ext2SuperBlock {
     pub fn magic_matched(self: &Self) -> bool { self.s_magic == EXT2_SUPER_MAGIC }
-    pub fn block_size(self: &Self) -> usize { 1 << self.s_log_block_size }
+    pub fn block_size(self: &Self) -> usize { self.block_size_kib() * 0x400 }
+    pub fn block_size_kib(self: &Self) -> usize { 1 << self.s_log_block_size }
 }
 
 /**

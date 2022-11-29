@@ -12,7 +12,7 @@ use nix::sys::signal;
 use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
 use log::*;
-use rfs::{DEVICE_FILE, FORCE_FORMAT, MOUNT_POINT, RFS};
+use rfs::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, MOUNT_POINT, RFS};
 
 mod rfs_lib;
 mod hello;
@@ -28,6 +28,8 @@ fn main() -> Result<()> {
         .arg(arg!(-f --front "Keep daemon running in front").action(ArgAction::SetTrue)
             .required(false))
         .arg(arg!(--format "Format disk").action(ArgAction::SetTrue)
+            .required(false))
+        .arg(arg!(--mkfs "Use mkfs.ext2 to format disk").action(ArgAction::SetTrue)
             .required(false))
         .arg(arg!(-r --read_only "Mount as read only filesystem").action(ArgAction::SetTrue)
             .required(false))
@@ -49,6 +51,8 @@ fn main() -> Result<()> {
 
     MOUNT_POINT.set(abspath_mountpoint.clone().to_string()).unwrap();
     FORCE_FORMAT.set(matches.get_flag("format")).unwrap();
+    MKFS_FORMAT.set(matches.get_flag("mkfs")).unwrap();
+    // MKFS_FORMAT.set(true).unwrap();
 
     macro_rules! umount {
         () => {
