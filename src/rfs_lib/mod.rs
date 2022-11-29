@@ -496,7 +496,8 @@ impl RFS {
                 if (b >> j) & 0x1 == 0 {
                     // if b & (1 << j) == 0 {
                     // found free bit, return
-                    return Ok(i * 8 + j);
+                    // return Ok(i * 8 + j);
+                    return Ok(i * 8 + j + 1);
                 }
             }
         };
@@ -504,6 +505,7 @@ impl RFS {
     }
 
     pub fn bitmap_set(bitmap: &mut Vec<u8>, index: usize) {
+        let index = if index == 0 { 0 } else { index - 1 };
         let b = bitmap[index / 8] | (1 << (index % 8));
         bitmap[index / 8] = b;
     }

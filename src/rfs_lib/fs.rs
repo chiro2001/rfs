@@ -243,8 +243,13 @@ impl Filesystem for RFS {
         rep_mut!(reply, inode_parent, self.get_inode(parent as usize));
         // search inode bitmap for free inode
         rep_mut!(reply, ino_free, Self::bitmap_search(&self.bitmap_inode));
-        ino_free += 1;
+        // ino_free += 1;
         Self::bitmap_set(&mut self.bitmap_inode, ino_free);
+        // save bitmap
+        let bitmap_block = self.get_group_desc().bg_inode_bitmap as usize;
+        let bitmap_clone = self.bitmap_inode.clone();
+        rep!(reply, self.write_data_block(bitmap_block, &bitmap_clone));
+
         // create entry and inode
         let mut entry = Ext2DirEntry::new_file(name.to_str().unwrap(), ino_free);
         let mut inode = Ext2INode::default();
@@ -288,6 +293,10 @@ impl Filesystem for RFS {
             last_block_i += 1;
             rep!(reply, block_free, Self::bitmap_search(&self.bitmap_data));
             Self::bitmap_set(&mut self.bitmap_data, block_free);
+            // save bitmap
+            let bitmap_block = self.get_group_desc().bg_block_bitmap as usize;
+            let bitmap_clone = self.bitmap_inode.clone();
+            rep!(reply, self.write_data_block(bitmap_block, &bitmap_clone));
             inode_parent.i_block[last_block_i] = block_free as u32;
             // reload parent_dir
             rep!(reply, parent_enties_2, self.get_block_dir_entries(block_free));
