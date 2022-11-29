@@ -525,7 +525,8 @@ impl RFS {
         self.write_data_block(bitmap_block, &bitmap_clone)?;
 
         // create entry and inode
-        let mut entry = Ext2DirEntry::new_file(name, ino_free);
+        // let mut entry = Ext2DirEntry::new_file(name, ino_free);
+        let mut entry = Ext2DirEntry::new(name, ino_free, file_type as u8);
         let mut inode = Ext2INode::default();
         entry.inode = ino_free as u32;
         debug!("entry use new ino {}", ino_free);
@@ -646,8 +647,14 @@ impl RFS {
                 inode.i_size = self.block_size() as u32;
                 debug!("inode.i_blocks = {}, inode.i_size = {}", inode.i_blocks, inode.i_size);
                 let mut entries = vec![];
-                entries.push(Ext2DirEntry::new_dir(".", ino_free));
-                entries.push(Ext2DirEntry::new_dir("..", parent));
+                debug!("set first data block...");
+                inode.i_block[0] = data_block_free as u32;
+                debug!("data block now: {:?}", inode.i_block[0]);
+                let mut dir_this = entry.clone();
+                dir_this.update_name(".");
+                entries.push(dir_this);
+                let dir_parent = Ext2DirEntry::new_dir("..", parent);
+                entries.push(dir_parent);
                 let lens = entries.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
                 let mut offset = 0;
                 for l in &lens {

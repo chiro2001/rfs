@@ -973,20 +973,28 @@ impl Ext2DirEntry {
         format!("{} {} entry size {} name size {}", self.inode,
                 self.get_name(), self.rec_len, self.name_len)
     }
-    pub fn new(name: &str, inode: usize, file_type: u8) -> Self {
-        let mut name_u8 = [0 as u8; EXT2_NAME_LEN];
+    pub fn update_rec_len(&mut self) {
+        self.rec_len = up_align(4 + 2 + 1 + 1 + self.name.len(), 2) as u16;
+    }
+    pub fn update_name(&mut self, name: &str) {
         let name_bytes = name.as_bytes();
         assert!(name_bytes.len() < EXT2_NAME_LEN);
-        name_u8[..name_bytes.len()].copy_from_slice(name_bytes);
+        self.name[..name_bytes.len()].copy_from_slice(name_bytes);
+        self.name_len = name_bytes.len() as u8;
         assert!(name.len() < 256, "Too long filename!");
-        let rec_len = up_align(4 + 2 + 1 + 1 + name.len(), 2) as u16;
-        Self {
-            inode: inode as u32,
-            rec_len,
-            name_len: name.len() as u8,
-            file_type,
-            name: name_u8,
-        }
+        self.update_rec_len();
+    }
+    pub fn new(name: &str, inode: usize, file_type: u8) -> Self {
+        let mut e =
+            Self {
+                inode: inode as u32,
+                rec_len: 0,
+                name_len: 0,
+                file_type,
+                name: [0 as u8; EXT2_NAME_LEN],
+            };
+        e.update_name(name);
+        e
     }
     pub fn new_file(name: &str, inode: usize) -> Self {
         Self::new(name, inode, EXT2_FT_REG_FILE)
