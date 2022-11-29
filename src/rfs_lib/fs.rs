@@ -183,7 +183,7 @@ impl Filesystem for RFS {
                atime: Option<SystemTime>, mtime: Option<SystemTime>, _fh: Option<u64>,
                _crtime: Option<SystemTime>, chgtime: Option<SystemTime>,
                bkuptime: Option<SystemTime>, flags: Option<u32>, reply: ReplyAttr) {
-        prv!("setattr", ino);
+        prv!("setattr", ino, atime, mtime);
         let ino = RFS::shift_ino(ino);
         rep_mut!(reply, node, self.get_inode(ino));
         match mode {
@@ -233,16 +233,63 @@ impl Filesystem for RFS {
             _ => {}
         };
         rep!(reply, self.set_inode(ino, &node));
+        let attr = node.to_attr(ino);
+        reply.attr(&TTL, &attr);
     }
 
     fn mknod(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _rdev: u32, reply: ReplyEntry) {
-        rep!(reply, inode_parent, self.get_inode(parent as usize));
+        prv!("mknode", parent, name, mode);
+        rep_mut!(reply, inode_parent, self.get_inode(parent as usize));
         // search inode bitmap for free inode
         rep!(reply, ino_free, Self::bitmap_search(&self.bitmap_inode));
         Self::bitmap_set(&mut self.bitmap_inode, ino_free);
         // create entry and inode
-        let entry = Ext2DirEntry::new_file(name.to_str().unwrap(), ino_free);
-        // let inode = Ext2INode::default()
+        let mut entry = Ext2DirEntry::new_file(name.to_str().unwrap(), ino_free);
+        let mut inode = Ext2INode::default();
+        entry.inode = ino_free as u32;
+        inode.i_mode = (mode & 0xFFF) as u16 | (0x8 << 12);
+        // append to parent dir entry
+        let mut last_block_i = usize::MAX;
+        for (i, d) in inode_parent.i_block.iter().enumerate() {
+            if *d != 0 { last_block_i = i; }
+        }
+        if last_block_i == usize::MAX {
+            panic!("data block is empty");
+        }
+        // TODO layer 1-3 support
+        assert!(!(last_block_i == 12 || last_block_i == 13 || last_block_i == 14));
+        // read parent dir
+        rep_mut!(reply, parent_enties, self.get_block_dir_entries(inode_parent.i_block[last_block_i] as usize));
+        let mut entries_lengths: Vec<usize> = parent_enties.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
+        let mut offset_cnt = 0 as usize;
+        for len in entries_lengths { offset_cnt += len; }
+        if offset_cnt + entry.rec_len as usize >= self.block_size() {
+            // append block index and load next block
+            assert_ne!(last_block_i, 11);
+            last_block_i += 1;
+            rep!(reply, block_free, Self::bitmap_search(&self.bitmap_data));
+            Self::bitmap_set(&mut self.bitmap_data, block_free);
+            inode_parent.i_block[last_block_i] = block_free as u32;
+            // reload parent_dir
+            rep!(reply, parent_enties_2, self.get_block_dir_entries(block_free));
+            parent_enties = parent_enties_2;
+            entries_lengths = parent_enties.iter().map(|e| e.rec_len as usize).collect();
+            offset_cnt = 0;
+            for len in entries_lengths { offset_cnt += len; }
+        }
+        // write entry to buf
+        let mut data_block = self.create_block_vec();
+        rep!(reply, self.read_block(&mut data_block));
+        let entry_data = unsafe { serialize_row(&entry) };
+        data_block[offset_cnt..offset_cnt + entry.rec_len as usize].copy_from_slice(&entry_data[..entry.rec_len as usize]);
+        // write back buf
+        rep!(reply, self.write_data_block(inode_parent.i_block[last_block_i] as usize, &data_block));
+        debug!("mknod done");
+        let attr = inode.to_attr(ino_free);
+        debug!("file {} == {} created! attr: {:?}", name.to_str().unwrap(), entry.get_name(), attr);
+        // write new inode
+        rep!(reply, self.set_inode(ino_free, &inode));
+        reply.entry(&TTL, &attr, 0);
     }
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {

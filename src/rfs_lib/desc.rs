@@ -310,6 +310,10 @@ pub fn utc_time(timestamp_seconds: u32) -> SystemTime {
     SystemTime::from(datetime)
 }
 
+pub fn get_time_now() -> u32 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32
+}
+
 impl Ext2INode {
     pub fn to_attr(self: &Self, ino: usize) -> FileAttr {
         prv!("to_attr", ino, self);
@@ -353,9 +357,9 @@ impl Default for Ext2INode {
             i_mode: 0,
             i_uid: 0,
             i_size: 0,
-            i_atime: 0,
-            i_ctime: 0,
-            i_mtime: 0,
+            i_atime: get_time_now(),
+            i_ctime: get_time_now(),
+            i_mtime: get_time_now(),
             i_dtime: 0,
             i_gid: 0,
             i_links_count: 0,
@@ -946,14 +950,16 @@ impl Ext2DirEntry {
     }
     pub fn new(name: &str, inode: usize, file_type: u8) -> Self {
         let mut name_u8 = [0 as u8; EXT2_NAME_LEN];
-        name_u8.copy_from_slice(name.as_bytes());
+        let name_bytes = name.as_bytes();
+        assert!(name_bytes.len() < EXT2_NAME_LEN);
+        name_u8[..name_bytes.len()].copy_from_slice(name_bytes);
         assert!(name.len() < 256, "Too long filename!");
-        Self{
+        Self {
             inode: inode as u32,
             rec_len: (4 + 2 + 1 + 1 + name.len()) as u16,
             name_len: name.len() as u8,
             file_type,
-            name: name_u8
+            name: name_u8,
         }
     }
     pub fn new_file(name: &str, inode: usize) -> Self {

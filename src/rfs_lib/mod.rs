@@ -1,6 +1,7 @@
+/// Filesystem logics
 use std::cmp::max;
 use std::iter;
-/// Filesystem logics
+use std::mem::size_of;
 use std::time::Duration;
 pub use disk_driver;
 use anyhow::{anyhow, Result};
@@ -191,7 +192,7 @@ impl RFS {
         self.seek_block(block_number)?;
         self.read_block(&mut buf)?;
         self.seek_block(block_number)?;
-        buf[offset..].copy_from_slice(unsafe { serialize_row(inode) });
+        buf[offset..offset + size_of::<Ext2INode>()].copy_from_slice(unsafe { serialize_row(inode) });
         self.write_block(&buf)?;
         Ok(())
     }
@@ -208,6 +209,13 @@ impl RFS {
     pub fn read_data_block(self: &mut Self, block: usize, buf: &mut [u8]) -> Result<()> {
         self.seek_block(block)?;
         self.read_block(buf)?;
+        Ok(())
+    }
+
+    /// Write one data block from slice inplace
+    pub fn write_data_block(self: &mut Self, block: usize, buf: &[u8]) -> Result<()> {
+        self.seek_block(block)?;
+        self.write_block(buf)?;
         Ok(())
     }
 
@@ -478,7 +486,8 @@ impl RFS {
         for (i, byte) in bitmap.iter().enumerate() {
             let b = *byte;
             for j in 0..8 {
-                if (b >> i) & 0x1 == 0 {
+                if (b >> j) & 0x1 == 0 {
+                    // if b & (1 << j) == 0 {
                     // found free bit, return
                     return Ok(i * 8 + j);
                 }
