@@ -60,6 +60,20 @@ pub struct RFS<T: DiskDriver> {
     pub root_dir: Ext2INode,
 }
 
+impl<T: DiskDriver> Into<RFSBase> for RFS<T> {
+    fn into(self) -> RFSBase {
+        RFSBase {
+            driver_info: self.driver_info,
+            super_block: self.super_block,
+            group_desc_table: self.group_desc_table,
+            filesystem_first_block: self.filesystem_first_block,
+            bitmap_inode: self.bitmap_inode,
+            bitmap_data: self.bitmap_data,
+            root_dir: self.root_dir,
+        }
+    }
+}
+
 impl<T: DiskDriver> RFS<T> {
     /// Create RFS object from selected DiskDriver
     #[allow(dead_code)]
@@ -73,6 +87,19 @@ impl<T: DiskDriver> RFS<T> {
             bitmap_inode: vec![],
             bitmap_data: vec![],
             root_dir: Default::default(),
+        }
+    }
+
+    pub fn from_base(that: RFSBase, driver: T) -> Self {
+        Self {
+            driver,
+            driver_info: that.driver_info,
+            super_block: that.super_block,
+            group_desc_table: that.group_desc_table,
+            filesystem_first_block: that.filesystem_first_block,
+            bitmap_inode: that.bitmap_inode,
+            bitmap_data: that.bitmap_data,
+            root_dir: that.root_dir,
         }
     }
 
