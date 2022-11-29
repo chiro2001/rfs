@@ -13,7 +13,7 @@ pub mod utils;
 pub mod desc;
 pub mod types;
 pub mod mem;
-pub mod fs;
+pub mod fuse;
 
 use utils::*;
 use mem::*;
@@ -285,6 +285,7 @@ impl RFS {
         //     Ok(index * sz < size)
         // }));
 
+        // TODO: layer 1-3 directory entries supporting
         Ok(inode.i_block.iter().take(12)
             .map(|b| match self.get_block_dir_entries(*b as usize) {
                 Ok(e) => e,
@@ -432,26 +433,7 @@ impl RFS {
                 save_inode_and_exit!(true);
             }
         }
-        // macro_rules! call_f {
-        //     ($block:expr, $index:expr, $inode_modified:expr) => {
-        //         {
-        //             let mut block = $block as usize;
-        //             loop {
-        //                 let r = f(block, $index)?;
-        //                 if r.1 {
-        //                     // reach data end, and need to allocate new block
-        //                     block = self.allocate_block()?;
-        //                     $inode_modified = true;
-        //                 } else {
-        //                     if !r.0 { save_inode_and_exit!($inode_modified); }
-        //                 }
-        //             }
-        //             block
-        //         }
-        //     };
-        // }
         for i in block_index..self.threshold(0) {
-            // call_f!()
             loop {
                 let r = f(inode.i_block[i] as usize, i)?;
                 if r.1 {
@@ -591,7 +573,6 @@ impl RFS {
             for j in 0..8 {
                 if (b >> j) & 0x1 == 0 {
                     // found free bit, return
-                    // return Ok(i * 8 + j);
                     return Ok(i * 8 + j + 1);
                 }
             }
@@ -614,7 +595,6 @@ impl RFS {
         let ino_free = self.allocate_inode()?;
 
         // create entry and inode
-        // let mut entry = Ext2DirEntry::new_file(name, ino_free);
         let mut entry = Ext2DirEntry::new(name, ino_free, file_type as u8);
         let mut inode = Ext2INode::default();
         entry.inode = ino_free as u32;
