@@ -36,15 +36,20 @@ impl DiskDriver for FileDiskDriver {
         }
         self.file = Some(OpenOptions::new().read(true).write(true).open(path)?);
         let filesize = self.get_file().metadata()?.len();
+        debug!("file size: {}", filesize);
         // padding zero to filesize
         if filesize < self.info.consts.layout_size.into() {
+            debug!("too small file, write zeros for padding");
             let padding = self.info.consts.layout_size as usize - filesize as usize;
             self.ddriver_write(&[0 as u8].repeat(padding), padding)?;
+            debug!("write done");
+            self.file.as_ref().unwrap().flush();
         }
         Ok(())
     }
 
     fn ddriver_close(self: &mut Self) -> Result<()> {
+        self.file.as_ref().unwrap().flush();
         Ok(())
     }
 

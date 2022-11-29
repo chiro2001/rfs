@@ -56,6 +56,8 @@ impl Filesystem for RFS {
         let format = ret(FORCE_FORMAT.read())?.clone();
         if !super_block.magic_matched() || format {
             if !format { warn!("FileSystem not found! creating super block..."); } else { warn!("Will format disk!") }
+            debug!("close driver");
+            ret(self.driver.ddriver_close())?;
             super_block = Ext2SuperBlock::default();
             // set block size to 1 KiB
             super_block.s_log_block_size = 10;
@@ -75,13 +77,19 @@ impl Filesystem for RFS {
             info!("total {} blocks", block_count);
             // TODO: create layout
             // let's use mkfs.ext2
+            // create file
+            let mut command = execute::command_args!("dd", format!("of={}", file), "if=/dev/zero",
+                format!("bs={}", self.disk_block_size()),
+                format!("count={}", self.disk_size() / self.disk_block_size()));
+            command.stdout(Stdio::piped());
+            let output = command.execute_output().unwrap();
+            info!("{}", String::from_utf8(output.stdout).unwrap());
             // use version 0
             let mut command = execute::command_args!("mkfs.ext2", file, "-t", "ext2", "-r", "0");
             command.stdout(Stdio::piped());
             let output = command.execute_output().unwrap();
             info!("{}", String::from_utf8(output.stdout).unwrap());
             // reload disk driver
-            ret(self.driver.ddriver_close())?;
             ret(self.driver.ddriver_open(&file))?;
             ret(self.seek_block(0))?;
             ret(self.read_disk_blocks(&mut data_blocks_head, super_blk_count))?;
