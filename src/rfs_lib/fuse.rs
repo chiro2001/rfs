@@ -78,51 +78,7 @@ impl Filesystem for RFS {
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32, reply: ReplyData) {
         prv!("read", ino, offset, size);
-        debug!("#read: offset = {:x}, size = {:x}", offset, size);
-        let mut offset = offset as usize;
-        let size = size as usize;
-        let sz = self.block_size();
-        let ino = RFS::shift_ino(ino as usize);
-        let mut blocks: Vec<usize> = vec![];
-        let start_index = offset / self.block_size();
-        assert_eq!(offset % self.block_size(), 0);
-
-        let disk_size = self.disk_size();
-        let mut last_index = 0 as usize;
-        let mut last_block = 0 as usize;
-        // rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
-        rep!(reply, self.visit_blocks_inode(ino, start_index, &mut |block, index| {
-            let will_continue = (index + 1) * sz - offset < size;
-            blocks.push(block);
-            debug!("read walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
-                block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
-            if block == 0 {
-                debug!("zero block!");
-                return Ok((will_continue, false));
-            }
-            if block * sz > disk_size {
-                panic!("error block number {:x}!", block);
-            }
-            // Ok((index + 1 - start_index) * sz < size)
-            if last_index != 0 && last_index + 1 != index {
-                panic!("error index increase! index now: {}", index);
-            }
-            last_index = index;
-            if last_block != 0 && last_block > block {
-                error!("error block increase! block now: {}, last block: {}", block, last_block);
-            }
-            last_block = block;
-            Ok((will_continue, false))
-        }));
-        let mut data: Vec<u8> = [0 as u8].repeat(size);
-        for (i, block) in blocks.iter().enumerate() {
-            // if i * sz >= size { break; }
-            let right = min((i + 1) * sz, size);
-            rep!(reply, self.read_data_block(*block, &mut data[(i * sz)..right]));
-            offset += right - (i * sz);
-        }
-        // rep!(reply, last_data, String::from_utf8(Vec::from(&data[data.len()-16..])));
-        // debug!("last 16 byte: {}", last_data);
+        rep!(reply, data, self.rfs_read(ino, offset, size));
         reply.data(&data);
     }
 

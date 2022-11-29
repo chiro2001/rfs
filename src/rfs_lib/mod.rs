@@ -1,5 +1,5 @@
 /// Filesystem logics
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::fs::File;
 use std::io::Read;
 use std::mem::size_of;
@@ -1132,6 +1132,53 @@ impl RFS {
         };
         self.set_inode(ino, &node)?;
         Ok(node)
+    }
+
+    pub fn rfs_read(&mut self, ino: u64, offset: i64, size: u32) -> Result<Vec<u8>> {
+        debug!("#read: offset = {:x}, size = {:x}", offset, size);
+        let mut offset = offset as usize;
+        let size = size as usize;
+        let sz = self.block_size();
+        let ino = RFS::shift_ino(ino as usize);
+        let mut blocks: Vec<usize> = vec![];
+        let start_index = offset / self.block_size();
+        assert_eq!(offset % self.block_size(), 0);
+
+        let disk_size = self.disk_size();
+        let mut last_index = 0 as usize;
+        let mut last_block = 0 as usize;
+        // rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
+        self.visit_blocks_inode(ino, start_index, &mut |block, index| {
+            let will_continue = (index + 1) * sz - offset < size;
+            blocks.push(block);
+            debug!("read walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
+                block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
+            if block == 0 {
+                debug!("zero block!");
+                return Ok((will_continue, false));
+            }
+            if block * sz > disk_size {
+                panic!("error block number {:x}!", block);
+            }
+            // Ok((index + 1 - start_index) * sz < size)
+            if last_index != 0 && last_index + 1 != index {
+                panic!("error index increase! index now: {}", index);
+            }
+            last_index = index;
+            if last_block != 0 && last_block > block {
+                error!("error block increase! block now: {}, last block: {}", block, last_block);
+            }
+            last_block = block;
+            Ok((will_continue, false))
+        })?;
+        let mut data: Vec<u8> = [0 as u8].repeat(size);
+        for (i, block) in blocks.iter().enumerate() {
+            // if i * sz >= size { break; }
+            let right = min((i + 1) * sz, size);
+            self.read_data_block(*block, &mut data[(i * sz)..right])?;
+            offset += right - (i * sz);
+        }
+        Ok(data)
     }
 }
 
