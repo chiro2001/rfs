@@ -282,11 +282,10 @@ impl Filesystem for RFS {
         rep!(reply, self.visit_blocks_inode(ino, start_index, &mut |block, index| {
             let will_continue = (index + 1) * sz - offset < size;
             blocks.push(block);
-            debug!("walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
+            debug!("read walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
                 block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
             if block == 0 {
                 warn!("zero block!");
-                // TODO: file not found
             }
             if block * sz > disk_size {
                 panic!("error block number {:x}!", block);
@@ -314,8 +313,42 @@ impl Filesystem for RFS {
         reply.data(&data);
     }
 
-    fn write(&mut self, _req: &Request<'_>, _ino: u64, _fh: u64, _offset: i64, _data: &[u8], _flags: u32, reply: ReplyWrite) {
-        todo!()
+    fn write(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, data: &[u8], _flags: u32, reply: ReplyWrite) {
+        prv!("write", ino, offset, data.len());
+        debug!("#write: offset = {:x}, size = {:x}", offset, data.len());
+        let offset = offset as usize;
+        let size = data.len() as usize;
+        let sz = self.block_size();
+        let ino = RFS::shift_ino(ino);
+        let start_index = offset / self.block_size();
+        assert_eq!(offset % self.block_size(), 0);
+
+        let disk_size = self.disk_size();
+        let mut last_index = 0 as usize;
+        let mut last_block = 0 as usize;
+        // rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
+        rep!(reply, self.visit_blocks_inode(ino, start_index, &mut |block, index| {
+            let will_continue = (index + 1) * sz - offset < size;
+            // blocks.push(block);
+            // debug!("write walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
+            //     block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
+            if block == 0 {
+                warn!("zero block!");
+            }
+            if block * sz > disk_size {
+                panic!("error block number {:x}!", block);
+            }
+            // Ok((index + 1 - start_index) * sz < size)
+            if last_index != 0 && last_index + 1 != index {
+                panic!("error index increase! index now: {}", index);
+            }
+            last_index = index;
+            if last_block != 0 && last_block > block {
+                error!("error block increase! block now: {}, last block: {}", block, last_block);
+            }
+            last_block = block;
+            Ok((will_continue, false))
+        }));
     }
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {

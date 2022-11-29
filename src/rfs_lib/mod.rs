@@ -492,7 +492,7 @@ impl RFS {
         ino as usize
     }
 
-    pub fn bitmap_search(bitmap: &Vec<u8>) -> Result<usize> {
+    pub fn bitmap_search(bitmap: &[u8]) -> Result<usize> {
         for (i, byte) in bitmap.iter().enumerate() {
             let b = *byte;
             for j in 0..8 {
@@ -507,7 +507,7 @@ impl RFS {
         Err(anyhow!("Bitmap full!"))
     }
 
-    pub fn bitmap_set(bitmap: &mut Vec<u8>, index: usize) {
+    pub fn bitmap_set(bitmap: &mut [u8], index: usize) {
         let index = if index == 0 { 0 } else { index - 1 };
         let b = bitmap[index / 8] | (1 << (index % 8));
         bitmap[index / 8] = b;
@@ -518,13 +518,7 @@ impl RFS {
         let file_type: usize = node_type.clone().into();
         let mut inode_parent = self.get_inode(parent as usize)?;
         // search inode bitmap for free inode
-        let ino_free = Self::bitmap_search(&self.bitmap_inode)?;
-        // ino_free += 1;
-        Self::bitmap_set(&mut self.bitmap_inode, ino_free);
-        // save bitmap
-        let bitmap_block = self.get_group_desc().bg_inode_bitmap as usize;
-        let bitmap_clone = self.bitmap_inode.clone();
-        self.write_data_block(bitmap_block, &bitmap_clone)?;
+        let ino_free = self.allocate_inode()?;
 
         // create entry and inode
         // let mut entry = Ext2DirEntry::new_file(name, ino_free);
@@ -569,12 +563,7 @@ impl RFS {
             // append block index and load next block
             assert_ne!(last_block_i, 11);
             last_block_i += 1;
-            let block_free = Self::bitmap_search(&self.bitmap_data)?;
-            Self::bitmap_set(&mut self.bitmap_data, block_free);
-            // save bitmap
-            let bitmap_block = self.get_group_desc().bg_block_bitmap as usize;
-            let bitmap_clone = self.bitmap_inode.clone();
-            self.write_data_block(bitmap_block, &bitmap_clone)?;
+            let block_free = self.allocate_block()?;
             inode_parent.i_block[last_block_i] = block_free as u32;
             // reload parent_dir
             let parent_enties_2 = self.get_block_dir_entries(block_free)?;
@@ -630,12 +619,7 @@ impl RFS {
         match node_type {
             Ext2FileType::Directory | Ext2FileType::RegularFile => {
                 debug!("finding new data block...");
-                let block_free = Self::bitmap_search(&self.bitmap_data)?;
-                Self::bitmap_set(&mut self.bitmap_data, block_free);
-                // save bitmap
-                let bitmap_block = self.get_group_desc().bg_block_bitmap as usize;
-                let bitmap_clone = self.bitmap_inode.clone();
-                self.write_data_block(bitmap_block, &bitmap_clone)?;
+                let block_free = self.allocate_block()?;
                 data_block_free = block_free;
                 debug!("found free block: {}", data_block_free);
             }
@@ -698,6 +682,26 @@ impl RFS {
         debug!("write parent inode: [{}] {:?}", parent, inode_parent);
         self.set_inode(parent as usize, &inode_parent)?;
         Ok((ino_free, inode))
+    }
+
+    fn allocate_bitmap(&mut self, bitmap_block: usize, is_data: bool) -> Result<usize> {
+        let bitmap = if is_data { &mut self.bitmap_data } else { &mut self.bitmap_inode };
+        let block_free = Self::bitmap_search(bitmap)?;
+        Self::bitmap_set(bitmap, block_free);
+        // save bitmap
+        let bitmap_clone: Vec<u8> = bitmap.clone();
+        self.write_data_block(bitmap_block, &bitmap_clone)?;
+        Ok(block_free)
+    }
+
+    pub fn allocate_block(&mut self) -> Result<usize> {
+        let block = self.get_group_desc().bg_block_bitmap as usize;
+        self.allocate_bitmap(block, true)
+    }
+
+    pub fn allocate_inode(&mut self) -> Result<usize> {
+        let block = self.get_group_desc().bg_inode_bitmap as usize;
+        self.allocate_bitmap(block, false)
     }
 }
 
