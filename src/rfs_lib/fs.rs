@@ -12,9 +12,8 @@ use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request
 use libc::ENOENT;
 use log::*;
 use crate::{FORCE_FORMAT, prv, rep, rep_mut};
-use crate::desc::Ext2FileType;
-use crate::rfs_lib::desc::EXT2_ROOT_INO;
-use crate::rfs_lib::desc::{Ext2GroupDesc, Ext2INode, Ext2SuperBlock, Ext2DirEntry};
+use crate::rfs_lib::desc::{EXT2_ROOT_INO, Ext2GroupDesc, Ext2INode,
+                           Ext2SuperBlock, Ext2DirEntry, Ext2FileType};
 use crate::rfs_lib::{TTL, RFS};
 use crate::rfs_lib::utils::*;
 
@@ -241,13 +240,19 @@ impl Filesystem for RFS {
 
     fn mknod(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _rdev: u32, reply: ReplyEntry) {
         prv!("mknod", parent, name, mode);
-        rep!(reply, self.make_node(parent as usize, name.to_str().unwrap(), mode as usize, Ext2FileType::RegularFile));
+        rep!(reply, inode_info, self.make_node(parent as usize, name.to_str().unwrap(), mode as usize, Ext2FileType::RegularFile));
+        let (ino, inode) = inode_info;
+        let attr = inode.to_attr(ino);
+        reply.entry(&TTL, &attr, 0);
         debug!("mknod done");
     }
 
     fn mkdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, reply: ReplyEntry) {
         prv!("mkdir", parent, name, mode);
-        rep!(reply, self.make_node(parent as usize, name.to_str().unwrap(), mode as usize, Ext2FileType::Directory));
+        rep!(reply, inode_info, self.make_node(parent as usize, name.to_str().unwrap(), mode as usize, Ext2FileType::Directory));
+        let (ino, inode) = inode_info;
+        let attr = inode.to_attr(ino);
+        reply.entry(&TTL, &attr, 0);
         debug!("mkdir done");
     }
 

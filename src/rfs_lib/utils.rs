@@ -260,40 +260,6 @@ pub fn show_hex_debug(data: &[u8], group_size: usize) {
     }
 }
 
-#[macro_export]
-macro_rules! back_to_enum {
-    ($(#[$meta:meta])* $vis:vis enum $name:ident {
-        $($(#[$vmeta:meta])* $vname:ident $(= $val:expr)?,)*
-    }) => {
-        $(#[$meta])*
-        $vis enum $name {
-            $($(#[$vmeta])* $vname $(= $val)?,)*
-        }
-
-        impl std::convert::TryFrom<usize> for $name {
-            type Error = ();
-
-            fn try_from(v: usize) -> Result<Self, Self::Error> {
-                match v {
-                    $(x if x == $name::$vname as usize => Ok($name::$vname),)*
-                    _ => Err(()),
-                }
-            }
-        }
-
-        impl std::convert::TryInto<usize> for $name {
-            type Error = ();
-
-            fn try_into(self) -> Result<usize, Self::Error> {
-                match v {
-                    $(x if x == $name::$vname as usize => Ok($name::$vname),)*
-                    _ => Err(()),
-                }
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use anyhow::Result;

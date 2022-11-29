@@ -512,7 +512,8 @@ impl RFS {
     }
 
     pub fn make_node(&mut self, parent: usize, name: &str,
-                     mode: usize, node_type: Ext2FileType) -> Result<()> {
+                     mode: usize, node_type: Ext2FileType) -> Result<(usize, Ext2INode)> {
+        let file_type: usize = node_type.into();
         let mut inode_parent = self.get_inode(parent as usize)?;
         // search inode bitmap for free inode
         let mut ino_free = Self::bitmap_search(&self.bitmap_inode)?;
@@ -528,7 +529,8 @@ impl RFS {
         let mut inode = Ext2INode::default();
         entry.inode = ino_free as u32;
         debug!("entry use new ino {}", ino_free);
-        inode.i_mode = (mode & 0xFFF) as u16 | ((node_type.try_into().unwrap()) << 12) as u16;
+
+        inode.i_mode = (mode & 0xFFF) as u16 | (file_type << 12) as u16;
         // append to parent dir entry
         let mut last_block_i = usize::MAX;
         for (i, d) in inode_parent.i_block.iter().enumerate() {
@@ -624,7 +626,7 @@ impl RFS {
         self.set_inode(ino_free, &inode)?;
         debug!("write parent inode: [{}] {:?}", parent, inode_parent);
         self.set_inode(parent as usize, &inode_parent)?;
-        Ok(())
+        Ok((ino_free, inode))
     }
 }
 

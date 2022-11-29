@@ -24,6 +24,7 @@ rand = "0.8.5"
 chrono = "0.4.23"
 log = "0.4.17"
 num = "0.4.0"
+num_enum = "0.5.7"
 
 [lib]
 crate-type = ["staticlib", "rlib"]

@@ -12,7 +12,6 @@ use fuse::{FileAttr, FileType};
 use rand::Rng;
 use crate::prv;
 use crate::rfs_lib::types::{le16, le32, s16};
-use crate::rfs_lib::utils::*;
 
 pub const EXT2_DEFAULT_PREALLOC_BLOCKS: usize = 8;
 
@@ -315,35 +314,26 @@ pub fn get_time_now() -> u32 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32
 }
 
-back_to_enum! {
+use num_enum::{TryFromPrimitive, IntoPrimitive};
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[repr(usize)]
 pub enum Ext2FileType {
     /// Unknown
     Unknown = 0,
     /// Regular file (S_IFREG)
-    RegularFile,
+    RegularFile = 8,
     /// Directory (S_IFDIR)
-    Directory,
+    Directory = 4,
     /// Character device (S_IFCHR)
-    CharDevice,
+    CharDevice = 2,
     /// Block device (S_IFBLK)
-    BlockDevice,
+    BlockDevice = 6,
     /// Named pipe (S_IFIFO)
-    NamedPipe,
+    NamedPipe = 1,
     /// Unix domain socket (S_IFSOCK)
-    Socket,
+    Socket = 0xc,
     /// Symbolic link (S_IFLNK)
-    Symlink,
-    /// FT_MAX
-    FtMax,
-}
-}
-
-impl TryInto<usize> for Ext2INode {
-    type Error = ();
-
-    fn try_into(self) -> Result<usize, Self::Error> {
-        todo!()
-    }
+    Symlink = 0xa,
 }
 
 impl Ext2INode {
