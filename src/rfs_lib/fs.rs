@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::Local;
 use disk_driver::{IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
 use execute::Execute;
-use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
+use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyWrite, Request};
 use libc::ENOENT;
 use log::*;
 use crate::{DEVICE_FILE, FORCE_FORMAT, prv, rep, rep_mut};
@@ -279,7 +279,7 @@ impl Filesystem for RFS {
         let mut last_index = 0 as usize;
         let mut last_block = 0 as usize;
         // rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
-        rep!(reply, self.read_blocks_inode(ino, start_index, &mut |block, index| {
+        rep!(reply, self.visit_blocks_inode(ino, start_index, &mut |block, index| {
             let will_continue = (index + 1) * sz - offset < size;
             blocks.push(block);
             debug!("walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
@@ -300,7 +300,7 @@ impl Filesystem for RFS {
                 error!("error block increase! block now: {}, last block: {}", block, last_block);
             }
             last_block = block;
-            Ok(will_continue)
+            Ok((will_continue, false))
         }));
         let mut data: Vec<u8> = [0 as u8].repeat(size);
         for (i, block) in blocks.iter().enumerate() {
@@ -312,6 +312,10 @@ impl Filesystem for RFS {
         // rep!(reply, last_data, String::from_utf8(Vec::from(&data[data.len()-16..])));
         // debug!("last 16 byte: {}", last_data);
         reply.data(&data);
+    }
+
+    fn write(&mut self, _req: &Request<'_>, _ino: u64, _fh: u64, _offset: i64, _data: &[u8], _flags: u32, reply: ReplyWrite) {
+        todo!()
     }
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {

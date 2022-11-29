@@ -389,11 +389,12 @@ impl RFS {
         Ok(())
     }
 
-    pub fn read_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
-        where F: FnMut(usize, usize) -> Result<bool> {
+    pub fn visit_blocks_inode<F>(self: &mut Self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
+        where F: FnMut(usize, usize) -> Result<(bool, bool)> {
         let inode = self.get_inode(ino)?;
         for i in block_index..self.threshold(0) {
-            if !f(inode.i_block[i] as usize, i)? { return Ok(()); }
+            let r = f(inode.i_block[i] as usize, i)?;
+            if !r.0 { return Ok(()); }
         }
         let layer_size = self.block_size() / 4;
         let mut layer_index = [usize::MAX; 3];
@@ -410,7 +411,8 @@ impl RFS {
             buf_u32.copy_from_slice(&layer_data[0][offset..offset + 4]);
             let block = u32::from_le_bytes(buf_u32.clone()) as usize;
             // debug!("buf: {:x?}, block: {:x}", buf_u32, block);
-            if !f(block, i)? { return Ok(()); }
+            let r = f(block, i)?;
+            if !r.0 { return Ok(()); }
         }
         // 13 -> L2
         for i in range_step(self.threshold(1), self.threshold(2), layer_size) {
@@ -433,8 +435,8 @@ impl RFS {
                 let offset = ((j - 12) % layer_size) << 2;
                 buf_u32.copy_from_slice(&layer_data[1][offset..offset + 4]);
                 let block = u32::from_le_bytes(buf_u32.clone()) as usize;
-
-                if !f(block, j)? { return Ok(()); }
+                let r = f(block, j)?;
+                if !r.0 { return Ok(()); }
             }
         }
         // 14 -> L3
@@ -473,7 +475,8 @@ impl RFS {
                     buf_u32.copy_from_slice(&layer_data[2][offset..offset + 4]);
                     let block = u32::from_le_bytes(buf_u32.clone()) as usize;
 
-                    if !f(block, k)? { return Ok(()); }
+                    let r = f(block, k)?;
+                    if !r.0 { return Ok(()); }
                 }
             }
         }
