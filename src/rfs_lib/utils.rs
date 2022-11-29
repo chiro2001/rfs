@@ -7,6 +7,7 @@ use core::mem::{align_of, forget, size_of};
 use core::slice::{from_raw_parts, from_raw_parts_mut};
 use std::os::raw::c_int;
 use fuse::{ReplyAttr, ReplyData, ReplyDirectory};
+use log::debug;
 
 pub trait VecExt {
     /// Casts a `Vec<T>` into a `Vec<U>`.
@@ -236,6 +237,27 @@ impl ReplyError for ReplyDirectory {
 
 pub fn up_align(value: usize, align_log: usize) -> usize {
     ((value >> align_log) + 1) << align_log
+}
+
+pub fn show_hex(data: &[u8], group_size: usize) {
+    for (i, b) in data.iter().enumerate() {
+        print!("{:02x} ", *b);
+        if i % group_size == group_size - 1 {
+            println!();
+        }
+    }
+}
+
+pub fn show_hex_debug(data: &[u8], group_size: usize) {
+    let mut v = vec![];
+    for (i, b) in data.iter().enumerate() {
+        // debug!("{:02x} ", *b);
+        v.push(*b);
+        if i % group_size == group_size - 1 {
+            debug!("{}", v.iter().map(|x| format!("{:2x}", x)).collect::<Vec<_>>().join(" "));
+            v.clear();
+        }
+    }
 }
 
 #[cfg(test)]

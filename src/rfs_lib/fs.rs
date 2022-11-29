@@ -300,7 +300,10 @@ impl Filesystem for RFS {
         debug!("parent inode blocks: {:x?}", inode_parent.i_block);
         info!("write entry to buf, rec_len = {}", entry.rec_len);
         let mut data_block = self.create_block_vec();
-        rep!(reply, self.read_block(&mut data_block));
+        // rep!(reply, self.read_block(&mut data_block));
+        rep!(reply, self.read_data_block(inode_parent.i_block[last_block_i] as usize, &mut data_block));
+        warn!("original data_block:");
+        show_hex_debug(&data_block[..0x50], 0x10);
         if reset_last_rec_len {
             debug!("write back modified parent entries");
             let parent_entries_tail = parent_enties.len() - 1;
@@ -314,9 +317,12 @@ impl Filesystem for RFS {
             // data_block[offset_cnt - parent_entries_last_rec_len_old as usize..offset_cnt + (parent_entries_last.rec_len - parent_entries_last_rec_len_old) as usize]
             //     .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
             let offset_next = offset_start + parent_entries_last.rec_len as usize;
+            warn!("data_block update: [{:x}..{:x}]", offset_start, offset_next);
             data_block[offset_start..offset_next]
                 .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
             // offset_cnt = up_align(offset_cnt, 4);
+            warn!("data_block after update:");
+            show_hex_debug(&data_block[..0x50], 0x10);
             offset_cnt = offset_next;
         }
         let old_rec_len = entry.rec_len;
@@ -324,7 +330,10 @@ impl Filesystem for RFS {
         entry.rec_len = (self.block_size() - offset_cnt) as u16;
         info!("new entry to write: {} {:?}", entry.to_string(), entry);
         let entry_data = unsafe { serialize_row(&entry) };
+        warn!("update data_block for entry_data: [{:x}..{:x}]", offset_cnt, offset_next);
         data_block[offset_cnt..offset_next].copy_from_slice(&entry_data[..old_rec_len as usize]);
+        warn!("data_block to write:");
+        show_hex_debug(&data_block[..0x50], 0x10);
         info!("write back buf block: {}", inode_parent.i_block[last_block_i]);
         rep!(reply, self.write_data_block(inode_parent.i_block[last_block_i] as usize, &data_block));
         let attr = inode.to_attr(ino_free);
@@ -393,7 +402,7 @@ impl Filesystem for RFS {
         rep!(reply, entries, self.get_dir_entries(ino));
         for (i, d) in entries.iter().enumerate().skip(offset as usize) {
             rep!(reply, inode, self.get_inode(d.inode as usize));
-            debug!("entry {}", d.to_string());
+            debug!("readdir entry[{}] [{}] {:?}", i, d.to_string(), d);
             reply.add(d.inode as u64, (i + 1) as i64, inode.to_attr(d.inode as usize).kind, d.get_name());
         }
         reply.ok();

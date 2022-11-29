@@ -64,6 +64,8 @@ impl DiskDriver for FileDiskDriver {
 
     fn ddriver_write(self: &mut Self, buf: &[u8], size: usize) -> Result<usize> {
         assert!(buf.len() >= size);
+        let offset = self.file.as_ref().unwrap().stream_position().unwrap() as usize;
+        debug!("disk write @ {:x} - {:x}", offset, offset + size);
         self.get_file().write_all(&buf[..size])?;
         Ok(size)
     }

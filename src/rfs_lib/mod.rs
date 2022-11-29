@@ -231,12 +231,12 @@ impl RFS {
             if dir.inode == 0 || dir.inode >= self.super_block.s_inodes_count || dir.rec_len == 0 {
                 break;
             }
-            // info!("[p {:x}] name_len = {}, rec_len = {}", p, dir.name_len, dir.rec_len);
+            info!("[p {:x}] name_len = {}, rec_len = {}", p, dir.name_len, dir.rec_len);
             p += dir.rec_len as usize;
-            // info!("next p: {:x}; dir: {}", p, dir.to_string());
+            info!("next p: {:x}; dir: {}", p, dir.to_string());
             dirs.push(dir);
         }
-        // info!("last dir entry: {:?}", dirs.last().unwrap());
+        if !dirs.is_empty() { info!("last dir entry: {} {:?}", dirs.last().unwrap().to_string(), dirs.last().unwrap()); }
         Ok(dirs)
     }
 
