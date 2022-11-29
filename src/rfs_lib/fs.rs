@@ -316,7 +316,7 @@ impl Filesystem for RFS {
         let base = offset;
         let sz = self.block_size();
         let ino = RFS::shift_ino(ino);
-        let start_index = offset / self.block_size();
+        let start_index = offset as usize / self.block_size();
         assert_eq!(offset % self.block_size(), 0);
 
         let mut blocks: Vec<usize> = vec![];
@@ -324,6 +324,7 @@ impl Filesystem for RFS {
         let disk_size = self.disk_size();
         let mut last_index = 0 as usize;
         let mut last_block = 0 as usize;
+        assert_eq!(0, offset % sz);
         // rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
         rep!(reply, self.visit_blocks_inode(ino, start_index, &mut |block, index| {
             let will_continue = (index + 1) * sz - offset < size;
@@ -354,6 +355,15 @@ impl Filesystem for RFS {
             let right = min((i + 1) * sz, size);
             rep!(reply, self.write_data_block(*block, &data[(i * sz)..right]));
             offset += right - (i * sz);
+        }
+        debug!("update file stats");
+        rep_mut!(reply, inode, self.get_inode(ino));
+        let filesize = inode.i_size as i64 | ((inode.i_size_high as i64) << 32);
+        if offset as i64 > filesize {
+            // TODO: large file
+            inode.i_size = offset as u32;
+            inode.i_size_high = (offset >> 32) as u32;
+            rep!(reply, self.set_inode(ino, &inode));
         }
         let written = offset - base;
         debug!("#write: reply written = {}", written);
