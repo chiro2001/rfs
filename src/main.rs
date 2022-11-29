@@ -14,16 +14,11 @@ use mut_static::MutStatic;
 use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
 use log::*;
-use rfs::RFS;
+use rfs::{FORCE_FORMAT, MOUNT_POINT, RFS};
 
 mod rfs_lib;
 mod hello;
 // mod utils;
-
-lazy_static! {
-    /// Store static mount point argument for signal call use
-    pub static ref MOUNT_POINT: MutStatic<String> = MutStatic::new();
-}
 
 fn main() -> Result<()> {
     let logging_level = std::env::var("RUST_LOG");
@@ -33,6 +28,8 @@ fn main() -> Result<()> {
         .arg(arg!([mountpoint] "Optional mountpoint to mount on")
             .default_value("tests/mnt"))
         .arg(arg!(-f --front "Keep daemon running in front").action(ArgAction::SetTrue)
+            .required(false))
+        .arg(arg!(--format "Format disk").action(ArgAction::SetTrue)
             .required(false))
         .arg(arg!(-r --read_only "Mount as read only filesystem").action(ArgAction::SetTrue)
             .required(false))
@@ -52,6 +49,7 @@ fn main() -> Result<()> {
     info!("Device: {}", device);
 
     MOUNT_POINT.set(abspath_mountpoint.clone().to_string()).unwrap();
+    FORCE_FORMAT.set(matches.get_flag("format")).unwrap();
 
     macro_rules! umount {
         () => {

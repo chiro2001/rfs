@@ -234,6 +234,10 @@ impl ReplyError for ReplyDirectory {
     fn make_error(self: Self, err: c_int) { self.error(err) }
 }
 
+pub fn up_align(value: usize, align_log: usize) -> usize {
+    ((value >> align_log) + 1) << align_log
+}
+
 #[cfg(test)]
 mod test {
     use anyhow::Result;

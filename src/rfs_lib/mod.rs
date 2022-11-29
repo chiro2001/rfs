@@ -192,7 +192,8 @@ impl RFS {
         self.seek_block(block_number)?;
         self.read_block(&mut buf)?;
         self.seek_block(block_number)?;
-        buf[offset..offset + size_of::<Ext2INode>()].copy_from_slice(unsafe { serialize_row(inode) });
+        buf[offset..offset + size_of::<Ext2INode>()]
+            .copy_from_slice(unsafe { serialize_row(inode) });
         self.write_block(&buf)?;
         Ok(())
     }

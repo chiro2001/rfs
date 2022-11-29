@@ -11,7 +11,7 @@ use execute::Execute;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
 use libc::ENOENT;
 use log::*;
-use crate::{prv, rep, rep_mut};
+use crate::{FORCE_FORMAT, prv, rep, rep_mut};
 use crate::rfs_lib::desc::EXT2_ROOT_INO;
 use crate::rfs_lib::desc::{Ext2GroupDesc, Ext2INode, Ext2SuperBlock, Ext2DirEntry};
 use crate::rfs_lib::{TTL, RFS};
@@ -53,8 +53,9 @@ impl Filesystem for RFS {
             super_block = unsafe { deserialize_row(&data_blocks_head) };
             if super_block.magic_matched() { self.filesystem_first_block = 1; }
         }
-        if !super_block.magic_matched() {
-            warn!("FileSystem not found! creating super block...");
+        let format = ret(FORCE_FORMAT.read())?.clone();
+        if !super_block.magic_matched() || format {
+            if !format { warn!("FileSystem not found! creating super block..."); } else { warn!("Will format disk!") }
             super_block = Ext2SuperBlock::default();
             // set block size to 1 KiB
             super_block.s_log_block_size = 10;
@@ -238,15 +239,17 @@ impl Filesystem for RFS {
     }
 
     fn mknod(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _rdev: u32, reply: ReplyEntry) {
-        prv!("mknode", parent, name, mode);
+        prv!("mknod", parent, name, mode);
         rep_mut!(reply, inode_parent, self.get_inode(parent as usize));
         // search inode bitmap for free inode
-        rep!(reply, ino_free, Self::bitmap_search(&self.bitmap_inode));
+        rep_mut!(reply, ino_free, Self::bitmap_search(&self.bitmap_inode));
+        ino_free += 1;
         Self::bitmap_set(&mut self.bitmap_inode, ino_free);
         // create entry and inode
         let mut entry = Ext2DirEntry::new_file(name.to_str().unwrap(), ino_free);
         let mut inode = Ext2INode::default();
         entry.inode = ino_free as u32;
+        info!("entry use new ino {}", ino_free);
         inode.i_mode = (mode & 0xFFF) as u16 | (0x8 << 12);
         // append to parent dir entry
         let mut last_block_i = usize::MAX;
@@ -262,7 +265,22 @@ impl Filesystem for RFS {
         rep_mut!(reply, parent_enties, self.get_block_dir_entries(inode_parent.i_block[last_block_i] as usize));
         let mut entries_lengths: Vec<usize> = parent_enties.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
         let mut offset_cnt = 0 as usize;
-        for len in entries_lengths { offset_cnt += len; }
+        let mut reset_last_rec_len = false;
+        for (i, len) in entries_lengths.iter().enumerate() {
+            if i != entries_lengths.len() - 1 {
+                offset_cnt += len;
+            } else {
+                // last entry may have a large rec_len
+                // calculate real size
+                if *len as i64 - (8 + parent_enties[i].name_len) as i64 >= entry.rec_len as i64 {
+                    reset_last_rec_len = true;
+                    offset_cnt += parent_enties[i].name_len as usize + 8;
+                } else {
+                    offset_cnt += len;
+                }
+            }
+        }
+        prv!(entries_lengths, offset_cnt);
         if offset_cnt + entry.rec_len as usize >= self.block_size() {
             info!("offset overflow! old last_block_i: {}, block: {}", last_block_i, inode_parent.i_block[last_block_i]);
             // append block index and load next block
@@ -276,14 +294,37 @@ impl Filesystem for RFS {
             parent_enties = parent_enties_2;
             entries_lengths = parent_enties.iter().map(|e| e.rec_len as usize).collect();
             offset_cnt = 0;
+            reset_last_rec_len = false;
             for len in entries_lengths { offset_cnt += len; }
         }
         debug!("parent inode blocks: {:x?}", inode_parent.i_block);
         info!("write entry to buf, rec_len = {}", entry.rec_len);
         let mut data_block = self.create_block_vec();
         rep!(reply, self.read_block(&mut data_block));
+        if reset_last_rec_len {
+            debug!("write back modified parent entries");
+            let parent_entries_tail = parent_enties.len() - 1;
+            let mut parent_entries_last = parent_enties[parent_entries_tail].clone();
+            info!("parent_entries_last: {} {:?}", parent_entries_last.to_string(), parent_entries_last);
+            let parent_entries_last_rec_len_old = parent_entries_last.rec_len as usize;
+            let offset_start = self.block_size() - parent_entries_last_rec_len_old;
+            parent_entries_last.rec_len = (up_align((parent_entries_last.name_len + 8) as usize, 4)) as u16;
+            info!("parent_entries_last updated: {} {:?}", parent_entries_last.to_string(), parent_entries_last);
+            let parent_entries_last_data = unsafe { serialize_row(&parent_entries_last) };
+            // data_block[offset_cnt - parent_entries_last_rec_len_old as usize..offset_cnt + (parent_entries_last.rec_len - parent_entries_last_rec_len_old) as usize]
+            //     .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
+            let offset_next = offset_start + parent_entries_last.rec_len as usize;
+            data_block[offset_start..offset_next]
+                .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
+            // offset_cnt = up_align(offset_cnt, 4);
+            offset_cnt = offset_next;
+        }
+        let old_rec_len = entry.rec_len;
+        let offset_next = offset_cnt + old_rec_len as usize;
+        entry.rec_len = (self.block_size() - offset_cnt) as u16;
+        info!("new entry to write: {} {:?}", entry.to_string(), entry);
         let entry_data = unsafe { serialize_row(&entry) };
-        data_block[offset_cnt..offset_cnt + entry.rec_len as usize].copy_from_slice(&entry_data[..entry.rec_len as usize]);
+        data_block[offset_cnt..offset_next].copy_from_slice(&entry_data[..old_rec_len as usize]);
         info!("write back buf block: {}", inode_parent.i_block[last_block_i]);
         rep!(reply, self.write_data_block(inode_parent.i_block[last_block_i] as usize, &data_block));
         let attr = inode.to_attr(ino_free);

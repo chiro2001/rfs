@@ -920,7 +920,7 @@ pub const EXT2_FEATURE_RO_COMPAT_SUPP: usize =
  */
 pub const EXT2_NAME_LEN: usize = 255;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(C, align(1))]
 pub struct Ext2DirEntry {
     ///   Inode number 
