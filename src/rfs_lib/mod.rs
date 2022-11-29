@@ -216,7 +216,17 @@ impl RFS {
     /// Write one data block from slice inplace
     pub fn write_data_block(self: &mut Self, block: usize, buf: &[u8]) -> Result<()> {
         self.seek_block(block)?;
-        self.write_block(buf)?;
+        assert!(buf.len() <= self.block_size(), "support sz <= block");
+        if buf.len() % self.block_size() == 0 {
+            self.write_block(buf)?;
+        } else {
+            debug!("write part of one block, read and update; source buf:");
+            show_hex_debug(buf, 16);
+            let mut block_data = self.create_block_vec();
+            self.read_data_block(block, &mut block_data)?;
+            block_data[..buf.len()].copy_from_slice(buf);
+            self.write_data_block(block, &mut block_data)?;
+        }
         Ok(())
     }
 
@@ -408,7 +418,7 @@ impl RFS {
         //             let mut block = $block as usize;
         //             loop {
         //                 let r = f(block, $index)?;
-        //                 if !r.1 {
+        //                 if r.1 {
         //                     // reach data end, and need to allocate new block
         //                     block = self.allocate_block()?;
         //                     $inode_modified = true;
@@ -424,7 +434,7 @@ impl RFS {
             // call_f!()
             loop {
                 let r = f(inode.i_block[i] as usize, i)?;
-                if !r.1 {
+                if r.1 {
                     // reach data end, and need to allocate new block
                     let new_block = self.allocate_block()?;
                     inode.i_block[i] = new_block as u32;
@@ -462,7 +472,7 @@ impl RFS {
                 buf_u32.copy_from_slice(layer_slice);
                 let block = u32::from_le_bytes(buf_u32.clone()) as usize;
                 let r = f(block, i)?;
-                if !r.1 {
+                if r.1 {
                     let new_block = self.allocate_block()?;
                     layer_slice.copy_from_slice(&new_block.to_be_bytes());
                     layer_modified[0] = false;

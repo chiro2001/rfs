@@ -43,13 +43,13 @@ impl DiskDriver for FileDiskDriver {
             let padding = self.info.consts.layout_size as usize - filesize as usize;
             self.ddriver_write(&[0 as u8].repeat(padding), padding)?;
             debug!("write done");
-            self.file.as_ref().unwrap().flush();
+            self.get_file().flush()?;
         }
         Ok(())
     }
 
     fn ddriver_close(self: &mut Self) -> Result<()> {
-        self.file.as_ref().unwrap().flush();
+        self.get_file().flush()?;
         Ok(())
     }
 
@@ -72,6 +72,7 @@ impl DiskDriver for FileDiskDriver {
         let offset = self.file.as_ref().unwrap().stream_position().unwrap() as usize;
         debug!("disk write @ {:x} - {:x}", offset, offset + size);
         self.get_file().write_all(&buf[..size])?;
+        self.get_file().flush()?;
         Ok(size)
     }
 

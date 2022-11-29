@@ -309,11 +309,11 @@ impl Filesystem for RFS {
     }
 
     fn write(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, data: &[u8], _flags: u32, reply: ReplyWrite) {
-        prv!("write", ino, offset, data.len());
-        debug!("#write: offset = {:x}, size = {:x}", offset, data.len());
+        let size = data.len() as usize;
+        prv!("write", ino, offset, size);
+        debug!("#write: offset = {:x}, size = {:x}", offset, size);
         let offset = offset as usize;
         let base = offset;
-        let size = data.len() as usize;
         let sz = self.block_size();
         let ino = RFS::shift_ino(ino);
         let start_index = offset / self.block_size();
@@ -327,13 +327,13 @@ impl Filesystem for RFS {
         // rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
         rep!(reply, self.visit_blocks_inode(ino, start_index, &mut |block, index| {
             let will_continue = (index + 1) * sz - offset < size;
-            blocks.push(block);
-            debug!("write walk to block {} index {}, continue={}, offset now={}, size now = {}",
-                block, index, will_continue, (index+1) * sz, (index+1) * sz - offset);
+            debug!("write walk to block {} index {}, continue={}, offset now={}, size now = {}, size total = {}",
+                block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, size);
             if block == 0 {
                 warn!("zero block!");
-                return Ok((will_continue, will_continue));
+                return Ok((will_continue, index * sz - offset < size));
             }
+            blocks.push(block);
             if block * sz > disk_size {
                 panic!("error block number {:x}!", block);
             }

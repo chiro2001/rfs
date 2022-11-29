@@ -242,7 +242,7 @@ pub fn up_align(value: usize, align_log: usize) -> usize {
 pub fn show_hex(data: &[u8], group_size: usize) {
     for (i, b) in data.iter().enumerate() {
         print!("{:02x} ", *b);
-        if i % group_size == group_size - 1 {
+        if i % group_size == group_size - 1 || i == data.len() - 1 {
             println!();
         }
     }
@@ -253,7 +253,7 @@ pub fn show_hex_debug(data: &[u8], group_size: usize) {
     for (i, b) in data.iter().enumerate() {
         // debug!("{:02x} ", *b);
         v.push(*b);
-        if i % group_size == group_size - 1 {
+        if i % group_size == group_size - 1 || i == data.len() - 1 {
             debug!("{}", v.iter().map(|x| format!("{:2x}", x)).collect::<Vec<_>>().join(" "));
             v.clear();
         }
