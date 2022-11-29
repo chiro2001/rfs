@@ -59,28 +59,11 @@ impl Filesystem for RFS {
         let format = ret(FORCE_FORMAT.read())?.clone();
         if !super_block.magic_matched() || format {
             if !format { warn!("FileSystem not found! creating super block..."); } else { warn!("Will format disk!") }
-            debug!("close driver");
-            ret(self.driver.ddriver_close())?;
-            super_block = Ext2SuperBlock::default();
-            // set block size to 1 KiB
-            super_block.s_log_block_size = 10;
-            // super block use first block (when block size is 1 KiB), set group 0 start block = 1;
-            // block size bigger than 2 KiB, use 0
-            super_block.s_first_data_block = if self.block_size() < 2 * 0x400 { 1 } else { 0 };
-            // 4 KiB / inode
-            super_block.s_inodes_count = (self.disk_size() / 0x400 / 4) as u32;
-            let block_count = self.disk_size() / super_block.block_size();
-            super_block.s_blocks_count = block_count as u32;
-            super_block.s_free_inodes_count = super_block.s_inodes_count;
-            super_block.s_free_blocks_count = super_block.s_blocks_count;
-
-            // timestamps
-            let dt = Local::now();
-            super_block.s_wtime = dt.timestamp_millis() as u32;
-            info!("total {} blocks", block_count);
             let mkfs = MKFS_FORMAT.read().unwrap().clone();
             if mkfs {
                 // let's use mkfs.ext2
+                debug!("close driver");
+                ret(self.driver.ddriver_close())?;
                 // create file
                 let mut command = execute::command_args!("dd", format!("of={}", file), "if=/dev/zero",
                 format!("bs={}", self.disk_block_size()),
@@ -112,7 +95,6 @@ impl Filesystem for RFS {
             } else {
                 // use manual fs layout
                 // reload disk driver
-                ret(self.driver.ddriver_open(&file))?;
                 ret(self.seek_block(0))?;
                 let default_layout_str = "
 | BSIZE = 1024 B |
@@ -276,6 +258,13 @@ impl Filesystem for RFS {
         debug!("inode bit map: {:?}", &bitmap_inode[..32]);
         self.bitmap_inode.clear();
         self.bitmap_inode.extend_from_slice(&bitmap_inode);
+
+        let reserved_blocks = 1 + 1 + 1 + 1 + 1 + super_block.s_inodes_count as usize / size_of::<Ext2INode>() + 1;
+        loop {
+            let block = ret(self.allocate_block())?;
+            debug!("allocate reserved block: {}", block);
+            if block > reserved_blocks { break; }
+        }
 
         // load root dir
         self.root_dir = ret(self.get_inode(EXT2_ROOT_INO))?;

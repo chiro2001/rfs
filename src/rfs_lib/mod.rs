@@ -597,6 +597,7 @@ impl RFS {
     }
 
     pub fn bitmap_set(bitmap: &mut [u8], index: usize) {
+        debug!("setting bitmap for index {}", index);
         let index = if index == 0 { 0 } else { index - 1 };
         let b = bitmap[index / 8] | (1 << (index % 8));
         bitmap[index / 8] = b;
@@ -786,7 +787,7 @@ impl RFS {
                 debug!("set self size to one block...");
                 let dir_entry_block_data = init_directory(&mut entry, &inode, data_block_free)?;
                 inode = dir_entry_block_data.1;
-                warn!("after update, inode: {:?}", inode);
+                warn!("after update, inode: {:?}; ready to write block: {}", inode, data_block_free);
                 self.write_data_block(data_block_free, &dir_entry_block_data.0)?;
             }
             Ext2FileType::RegularFile => {
