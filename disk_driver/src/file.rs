@@ -71,6 +71,7 @@ impl DiskDriver for FileDiskDriver {
         assert!(buf.len() >= size);
         let offset = self.file.as_ref().unwrap().stream_position().unwrap() as usize;
         debug!("disk write @ {:x} - {:x}", offset, offset + size);
+        assert_eq!(size % self.info.consts.iounit_size as usize, 0, "disk request must align to 512 bit!");
         self.get_file().write_all(&buf[..size])?;
         self.get_file().flush()?;
         Ok(size)

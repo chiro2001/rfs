@@ -404,7 +404,7 @@ impl Filesystem for RFS {
             debug!("read walk to block {} index {}, continue={}, offset now={}, size now = {}=={}",
                 block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
             if block == 0 {
-                warn!("zero block!");
+                debug!("zero block!");
                 return Ok((will_continue, false));
             }
             if block * sz > disk_size {
@@ -457,7 +457,7 @@ impl Filesystem for RFS {
             debug!("write walk to block {} index {}, continue={}, offset now={}, size now = {}, size total = {}",
                 block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, size);
             if block == 0 {
-                warn!("zero block!");
+                debug!("zero block!");
                 return Ok((will_continue, index * sz - offset < size));
             }
             blocks.push(block);
