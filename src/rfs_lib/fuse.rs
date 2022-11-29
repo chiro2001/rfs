@@ -1,20 +1,11 @@
-use std::cmp::min;
 /// FUSE operations.
 use std::ffi::OsStr;
-use std::fs::File;
-use std::io::Read;
-use std::mem::size_of;
-use std::os::raw::c_int;
-use std::path::Path;
-use std::process::Stdio;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 use disk_driver::{IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE};
-use execute::Execute;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyWrite, Request};
-use libc::ENOENT;
+use libc::{c_int, ENOENT};
 use log::*;
 use crate::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, prv, rep, rep_mut};
-// use crate::rfs_lib::fs::RustFileSystem;
 use crate::rfs_lib::desc::{EXT2_ROOT_INO, Ext2GroupDesc, Ext2INode,
                            Ext2SuperBlock, Ext2FileType, FsLayoutArgs};
 use crate::rfs_lib::{TTL, RFS};
