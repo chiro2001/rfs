@@ -513,7 +513,7 @@ impl RFS {
 
     pub fn make_node(&mut self, parent: usize, name: &str,
                      mode: usize, node_type: Ext2FileType) -> Result<(usize, Ext2INode)> {
-        let file_type: usize = node_type.into();
+        let file_type: usize = node_type.clone().into();
         let mut inode_parent = self.get_inode(parent as usize)?;
         // search inode bitmap for free inode
         let mut ino_free = Self::bitmap_search(&self.bitmap_inode)?;
@@ -622,6 +622,68 @@ impl RFS {
         self.write_data_block(inode_parent.i_block[last_block_i] as usize, &data_block)?;
         let attr = inode.to_attr(ino_free);
         debug!("file {} == {} created! attr: {:?}", name, entry.get_name(), attr);
+
+        let mut data_block_free = 0 as usize;
+        match node_type {
+            Ext2FileType::Directory | Ext2FileType::RegularFile => {
+                debug!("finding new data block...");
+                let block_free = Self::bitmap_search(&self.bitmap_data)?;
+                Self::bitmap_set(&mut self.bitmap_data, block_free);
+                // save bitmap
+                let bitmap_block = self.get_group_desc().bg_block_bitmap as usize;
+                let bitmap_clone = self.bitmap_inode.clone();
+                self.write_data_block(bitmap_block, &bitmap_clone)?;
+                data_block_free = block_free;
+                debug!("found free block: {}", data_block_free);
+            }
+            _ => {}
+        };
+        match node_type {
+            Ext2FileType::Directory => {
+                debug!("is directory, creating directory entries at block {}", data_block_free);
+                debug!("set self size to one block...");
+                inode.i_blocks = 1;
+                inode.i_size = self.block_size() as u32;
+                debug!("inode.i_blocks = {}, inode.i_size = {}", inode.i_blocks, inode.i_size);
+                let mut entries = vec![];
+                entries.push(Ext2DirEntry::new_dir(".", ino_free));
+                entries.push(Ext2DirEntry::new_dir("..", parent));
+                let lens = entries.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
+                let mut offset = 0;
+                for l in &lens {
+                    offset += l;
+                }
+                // pad rec_len
+                let mut entry_last = entries.last().unwrap().clone();
+                offset -= entry_last.rec_len as usize;
+                let entry_last_real_len = entry_last.rec_len;
+                entry_last.rec_len = (self.block_size() - offset) as u16;
+                let entries_len = entries.len();
+                entries[entries_len - 1] = entry_last;
+                let mut block_data = self.create_block_vec();
+                offset = 0;
+                for (i, entry) in entries.iter().enumerate() {
+                    debug!("write directory entry {} {:?}", entry.to_string(), entry);
+                    if i != entries_len - 1 {
+                        debug!("write offset [{}..{}]", offset, offset + entry.rec_len as usize);
+                        block_data[offset..offset + entry.rec_len as usize]
+                            .copy_from_slice(&unsafe { serialize_row(entry) }[..entry.rec_len as usize]);
+                        offset += entry.rec_len as usize;
+                    } else {
+                        debug!("write offset [{}..{}]", offset, offset + entry_last_real_len as usize);
+                        block_data[offset..offset + entry_last_real_len as usize]
+                            .copy_from_slice(&unsafe { serialize_row(entry) }[..entry_last_real_len as usize]);
+                    }
+                }
+                self.write_data_block(data_block_free, &block_data)?;
+            }
+            Ext2FileType::RegularFile => {
+                debug!("is regular file, first data at block {}", data_block_free);
+            }
+            _ => {}
+        };
+
+
         debug!("write new inode: [{}] {:?}", ino_free, inode);
         self.set_inode(ino_free, &inode)?;
         debug!("write parent inode: [{}] {:?}", parent, inode_parent);

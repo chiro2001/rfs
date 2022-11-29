@@ -2,6 +2,7 @@
 //! see: https://www.nongnu.org/ext2-doc/ext2.html
 #![allow(dead_code)]
 #![allow(unused_variables)]
+
 /**
  * Define EXT2_PREALLOCATE to preallocate data blocks for expanding files
  */
@@ -12,6 +13,7 @@ use fuse::{FileAttr, FileType};
 use rand::Rng;
 use crate::prv;
 use crate::rfs_lib::types::{le16, le32, s16};
+use crate::rfs_lib::utils::up_align;
 
 pub const EXT2_DEFAULT_PREALLOC_BLOCKS: usize = 8;
 
@@ -25,25 +27,25 @@ pub const EXT2FS_VERSION: &'static str = "0.5b";
  * Special inode numbers
  */
 ///   Bad blocks inode 
-pub const EXT2_BAD_INO: usize = 1         ;
+pub const EXT2_BAD_INO: usize = 1;
 ///   Root inode 
-pub const EXT2_ROOT_INO: usize = 2        ;
+pub const EXT2_ROOT_INO: usize = 2;
 ///   User quota inode 
-pub const EXT4_USR_QUOTA_INO: usize = 3   ;
+pub const EXT4_USR_QUOTA_INO: usize = 3;
 ///   Group quota inode 
-pub const EXT4_GRP_QUOTA_INO: usize = 4   ;
+pub const EXT4_GRP_QUOTA_INO: usize = 4;
 ///   Boot loader inode 
-pub const EXT2_BOOT_LOADER_INO: usize = 5 ;
+pub const EXT2_BOOT_LOADER_INO: usize = 5;
 ///   Undelete directory inode 
-pub const EXT2_UNDEL_DIR_INO: usize = 6   ;
+pub const EXT2_UNDEL_DIR_INO: usize = 6;
 ///   Reserved group descriptors inode 
-pub const EXT2_RESIZE_INO: usize = 7      ;
+pub const EXT2_RESIZE_INO: usize = 7;
 ///   Journal inode 
-pub const EXT2_JOURNAL_INO: usize = 8     ;
+pub const EXT2_JOURNAL_INO: usize = 8;
 ///   The "exclude" inode, for snapshots 
-pub const EXT2_EXCLUDE_INO: usize = 9     ;
+pub const EXT2_EXCLUDE_INO: usize = 9;
 ///   Used by non-upstream feature 
-pub const EXT4_REPLICA_INO: usize = 10    ;
+pub const EXT4_REPLICA_INO: usize = 10;
 
 /* First non-reserved inode for old ext2 filesystems */
 pub const EXT2_GOOD_OLD_FIRST_INO: usize = 11;
@@ -115,11 +117,11 @@ pub struct Ext2GroupDesc {
 }
 
 ///   Inode table/bitmap not initialized 
-pub const EXT2_BG_INODE_UNINIT: usize = 0x0001 ;
+pub const EXT2_BG_INODE_UNINIT: usize = 0x0001;
 ///   Block bitmap not initialized 
-pub const EXT2_BG_BLOCK_UNINIT: usize = 0x0002 ;
+pub const EXT2_BG_BLOCK_UNINIT: usize = 0x0002;
 ///   On-disk itable initialized to zero 
-pub const EXT2_BG_INODE_ZEROED: usize = 0x0004 ;
+pub const EXT2_BG_INODE_ZEROED: usize = 0x0004;
 
 /**
  * Data structures used by the directory indexing feature
@@ -148,11 +150,11 @@ pub const EXT2_BG_INODE_ZEROED: usize = 0x0004 ;
 pub const EXT2_HASH_LEGACY: usize = 0;
 pub const EXT2_HASH_HALF_MD4: usize = 1;
 pub const EXT2_HASH_TEA: usize = 2;
-pub const EXT2_HASH_LEGACY_UNSIGNED: usize = 3   ;
+pub const EXT2_HASH_LEGACY_UNSIGNED: usize = 3;
 ///   reserved for userspace lib 
-pub const EXT2_HASH_HALF_MD4_UNSIGNED: usize = 4 ;
+pub const EXT2_HASH_HALF_MD4_UNSIGNED: usize = 4;
 ///   reserved for userspace lib 
-pub const EXT2_HASH_TEA_UNSIGNED: usize = 5      ;
+pub const EXT2_HASH_TEA_UNSIGNED: usize = 5;
 pub const EXT2_HASH_SIPHASH: usize = 6;
 
 pub const EXT2_HASH_FLAG_INCOMPAT: usize = 0x1;
@@ -184,76 +186,76 @@ pub const EXT2_N_BLOCKS: usize = EXT2_TIND_BLOCK + 1;
  * Inode flags
  */
 ///   Secure deletion 
-pub const EXT2_SECRM_FL: usize = 0x00000001     ;
+pub const EXT2_SECRM_FL: usize = 0x00000001;
 ///   Undelete 
-pub const EXT2_UNRM_FL: usize = 0x00000002      ;
+pub const EXT2_UNRM_FL: usize = 0x00000002;
 ///   Compress file 
-pub const EXT2_COMPR_FL: usize = 0x00000004     ;
+pub const EXT2_COMPR_FL: usize = 0x00000004;
 ///   Synchronous updates 
-pub const EXT2_SYNC_FL: usize = 0x00000008      ;
+pub const EXT2_SYNC_FL: usize = 0x00000008;
 ///   Immutable file 
-pub const EXT2_IMMUTABLE_FL: usize = 0x00000010 ;
+pub const EXT2_IMMUTABLE_FL: usize = 0x00000010;
 ///   writes to file may only append 
-pub const EXT2_APPEND_FL: usize = 0x00000020    ;
+pub const EXT2_APPEND_FL: usize = 0x00000020;
 ///   do not dump file 
-pub const EXT2_NODUMP_FL: usize = 0x00000040    ;
+pub const EXT2_NODUMP_FL: usize = 0x00000040;
 ///   do not update atime 
-pub const EXT2_NOATIME_FL: usize = 0x00000080   ;
+pub const EXT2_NOATIME_FL: usize = 0x00000080;
 /* Reserved for compression usage... */
 ///   One or more compressed clusters 
 pub const EXT2_DIRTY_FL: usize = 0x00000100;
-pub const EXT2_COMPRBLK_FL: usize = 0x00000200 ;
+pub const EXT2_COMPRBLK_FL: usize = 0x00000200;
 ///   Access raw compressed data 
-pub const EXT2_NOCOMPR_FL: usize = 0x00000400  ;
+pub const EXT2_NOCOMPR_FL: usize = 0x00000400;
 /* nb: was previously EXT2_ECOMPR_FL */
 ///   encrypted inode 
-pub const EXT4_ENCRYPT_FL: usize = 0x00000800  ;
+pub const EXT4_ENCRYPT_FL: usize = 0x00000800;
 /* End compression flags --- maybe not all used */
 ///   btree format dir 
-pub const EXT2_BTREE_FL: usize = 0x00001000 ;
+pub const EXT2_BTREE_FL: usize = 0x00001000;
 ///   hash-indexed directory 
-pub const EXT2_INDEX_FL: usize = 0x00001000 ;
+pub const EXT2_INDEX_FL: usize = 0x00001000;
 ///   file data should be journaled 
 pub const EXT2_IMAGIC_FL: usize = 0x00002000;
-pub const EXT3_JOURNAL_DATA_FL: usize = 0x00004000 ;
+pub const EXT3_JOURNAL_DATA_FL: usize = 0x00004000;
 ///   file tail should not be merged 
-pub const EXT2_NOTAIL_FL: usize = 0x00008000       ;
+pub const EXT2_NOTAIL_FL: usize = 0x00008000;
 ///   Synchronous directory modifications 
-pub const EXT2_DIRSYNC_FL: usize = 0x00010000   ;
+pub const EXT2_DIRSYNC_FL: usize = 0x00010000;
 ///   Top of directory hierarchies
-pub const EXT2_TOPDIR_FL: usize = 0x00020000    ;
+pub const EXT2_TOPDIR_FL: usize = 0x00020000;
 ///   Set to each huge file 
-pub const EXT4_HUGE_FILE_FL: usize = 0x00040000 ;
+pub const EXT4_HUGE_FILE_FL: usize = 0x00040000;
 ///   Inode uses extents 
-pub const EXT4_EXTENTS_FL: usize = 0x00080000   ;
+pub const EXT4_EXTENTS_FL: usize = 0x00080000;
 ///   Verity protected inode 
-pub const EXT4_VERITY_FL: usize = 0x00100000    ;
+pub const EXT4_VERITY_FL: usize = 0x00100000;
 ///   Inode used for large EA 
-pub const EXT4_EA_INODE_FL: usize = 0x00200000  ;
+pub const EXT4_EA_INODE_FL: usize = 0x00200000;
 /* EXT4_EOFBLOCKS_FL 0x00400000 was here */
 ///   Do not cow file 
-pub const FS_NOCOW_FL: usize = 0x00800000              ;
+pub const FS_NOCOW_FL: usize = 0x00800000;
 ///   Inode is a snapshot 
-pub const EXT4_SNAPFILE_FL: usize = 0x01000000         ;
+pub const EXT4_SNAPFILE_FL: usize = 0x01000000;
 ///   Inode is DAX 
-pub const FS_DAX_FL: usize = 0x02000000                ;
+pub const FS_DAX_FL: usize = 0x02000000;
 ///   Snapshot is being deleted 
-pub const EXT4_SNAPFILE_DELETED_FL: usize = 0x04000000 ;
+pub const EXT4_SNAPFILE_DELETED_FL: usize = 0x04000000;
 ///   Snapshot shrink has completed 
-pub const EXT4_SNAPFILE_SHRUNK_FL: usize = 0x08000000  ;
+pub const EXT4_SNAPFILE_SHRUNK_FL: usize = 0x08000000;
 ///   Inode has inline data 
-pub const EXT4_INLINE_DATA_FL: usize = 0x10000000      ;
+pub const EXT4_INLINE_DATA_FL: usize = 0x10000000;
 ///   Create with parents projid 
-pub const EXT4_PROJINHERIT_FL: usize = 0x20000000      ;
+pub const EXT4_PROJINHERIT_FL: usize = 0x20000000;
 ///   Casefolded file 
-pub const EXT4_CASEFOLD_FL: usize = 0x40000000         ;
+pub const EXT4_CASEFOLD_FL: usize = 0x40000000;
 ///   reserved for ext2 lib 
-pub const EXT2_RESERVED_FL: usize = 0x80000000         ;
+pub const EXT2_RESERVED_FL: usize = 0x80000000;
 
 ///   User visible flags 
-pub const EXT2_FL_USER_VISIBLE: usize = 0x604BDFFF    ;
+pub const EXT2_FL_USER_VISIBLE: usize = 0x604BDFFF;
 ///   User modifiable flags 
-pub const EXT2_FL_USER_MODIFIABLE: usize = 0x604B80FF ;
+pub const EXT2_FL_USER_MODIFIABLE: usize = 0x604B80FF;
 
 #[derive(Debug)]
 #[repr(C, align(2))]
@@ -315,7 +317,8 @@ pub fn get_time_now() -> u32 {
 }
 
 use num_enum::{TryFromPrimitive, IntoPrimitive};
-#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
+
+#[derive(Debug, Clone, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(usize)]
 pub enum Ext2FileType {
     /// Unknown
@@ -368,7 +371,7 @@ impl Ext2INode {
             uid: self.i_uid as u32 + (self.i_uid_high as u32) << 16,
             gid: self.i_gid as u32 + (self.i_uid_high as u32) << 16,
             rdev: 0,
-            flags: 0
+            flags: 0,
         }
     }
 }
@@ -398,7 +401,7 @@ impl Default for Ext2INode {
             i_uid_high: 0,
             i_gid_high: 0,
             i_checksum_lo: 0,
-            i_reserved: 0
+            i_reserved: 0,
         }
     }
 }
@@ -407,67 +410,67 @@ impl Default for Ext2INode {
  * File system states
  */
 ///   Unmounted cleanly 
-pub const EXT2_VALID_FS: usize = 0x0001  ;
+pub const EXT2_VALID_FS: usize = 0x0001;
 ///   Errors detected 
-pub const EXT2_ERROR_FS: usize = 0x0002  ;
+pub const EXT2_ERROR_FS: usize = 0x0002;
 ///   Orphans being recovered 
-pub const EXT3_ORPHAN_FS: usize = 0x0004 ;
+pub const EXT3_ORPHAN_FS: usize = 0x0004;
 ///   Ext4 fast commit replay ongoing 
-pub const EXT4_FC_REPLAY: usize = 0x0020 ;
+pub const EXT4_FC_REPLAY: usize = 0x0020;
 
 /**
  * Misc. filesystem flags
  */
 ///   Signed dirhash in use 
-pub const EXT2_FLAGS_SIGNED_HASH: usize = 0x0001   ;
+pub const EXT2_FLAGS_SIGNED_HASH: usize = 0x0001;
 ///   Unsigned dirhash in use 
-pub const EXT2_FLAGS_UNSIGNED_HASH: usize = 0x0002 ;
+pub const EXT2_FLAGS_UNSIGNED_HASH: usize = 0x0002;
 ///   OK for use on development code 
-pub const EXT2_FLAGS_TEST_FILESYS: usize = 0x0004  ;
+pub const EXT2_FLAGS_TEST_FILESYS: usize = 0x0004;
 ///   This is a snapshot image 
-pub const EXT2_FLAGS_IS_SNAPSHOT: usize = 0x0010   ;
+pub const EXT2_FLAGS_IS_SNAPSHOT: usize = 0x0010;
 ///   Snapshot inodes corrupted 
-pub const EXT2_FLAGS_FIX_SNAPSHOT: usize = 0x0020  ;
+pub const EXT2_FLAGS_FIX_SNAPSHOT: usize = 0x0020;
 ///   Exclude bitmaps corrupted 
-pub const EXT2_FLAGS_FIX_EXCLUDE: usize = 0x0040   ;
+pub const EXT2_FLAGS_FIX_EXCLUDE: usize = 0x0040;
 
 /**
  * Mount flags
  */
 ///   Do mount-time checks 
-pub const EXT2_MOUNT_CHECK: usize = 0x0001        ;
+pub const EXT2_MOUNT_CHECK: usize = 0x0001;
 ///   Create files with directory's group 
-pub const EXT2_MOUNT_GRPID: usize = 0x0004        ;
+pub const EXT2_MOUNT_GRPID: usize = 0x0004;
 ///   Some debugging messages 
-pub const EXT2_MOUNT_DEBUG: usize = 0x0008        ;
+pub const EXT2_MOUNT_DEBUG: usize = 0x0008;
 ///   Continue on errors 
-pub const EXT2_MOUNT_ERRORS_CONT: usize = 0x0010  ;
+pub const EXT2_MOUNT_ERRORS_CONT: usize = 0x0010;
 ///   Remount fs ro on errors 
-pub const EXT2_MOUNT_ERRORS_RO: usize = 0x0020    ;
+pub const EXT2_MOUNT_ERRORS_RO: usize = 0x0020;
 ///   Panic on errors 
-pub const EXT2_MOUNT_ERRORS_PANIC: usize = 0x0040 ;
+pub const EXT2_MOUNT_ERRORS_PANIC: usize = 0x0040;
 ///   Mimics the Minix statfs 
-pub const EXT2_MOUNT_MINIX_DF: usize = 0x0080     ;
+pub const EXT2_MOUNT_MINIX_DF: usize = 0x0080;
 ///   Disable 32-bit UIDs 
-pub const EXT2_MOUNT_NO_UID32: usize = 0x0200     ;
+pub const EXT2_MOUNT_NO_UID32: usize = 0x0200;
 
 /**
  * Maximal mount counts between two filesystem checks
  */
 ///   Allow 20 mounts 
-pub const EXT2_DFL_MAX_MNT_COUNT: usize = 20 ;
+pub const EXT2_DFL_MAX_MNT_COUNT: usize = 20;
 ///   Don't use interval check 
-pub const EXT2_DFL_CHECKINTERVAL: usize = 0  ;
+pub const EXT2_DFL_CHECKINTERVAL: usize = 0;
 
 /**
  * Behaviour when detecting errors
  */
 ///   Continue execution 
-pub const EXT2_ERRORS_CONTINUE: usize = 1 ;
+pub const EXT2_ERRORS_CONTINUE: usize = 1;
 ///   Remount fs read-only 
-pub const EXT2_ERRORS_RO: usize = 2       ;
+pub const EXT2_ERRORS_RO: usize = 2;
 ///   Panic 
-pub const EXT2_ERRORS_PANIC: usize = 3    ;
+pub const EXT2_ERRORS_PANIC: usize = 3;
 pub const EXT2_ERRORS_DEFAULT: usize = EXT2_ERRORS_CONTINUE;
 
 /* Metadata checksum algorithms */
@@ -857,9 +860,9 @@ pub const EXT2_OS_LITES: usize = 4;
  * Revision levels
  */
 ///   The good old (original) format 
-pub const EXT2_GOOD_OLD_REV: usize = 0 ;
+pub const EXT2_GOOD_OLD_REV: usize = 0;
 ///   V2 format w/ dynamic inode sizes 
-pub const EXT2_DYNAMIC_REV: usize = 1  ;
+pub const EXT2_DYNAMIC_REV: usize = 1;
 
 pub const EXT2_CURRENT_REV: usize = EXT2_GOOD_OLD_REV;
 pub const EXT2_MAX_SUPP_REV: usize = EXT2_DYNAMIC_REV;
@@ -903,16 +906,16 @@ pub const EXT4_FEATURE_RO_COMPAT_BIGALLOC: usize = 0x0200;
 pub const EXT4_FEATURE_RO_COMPAT_METADATA_CSUM: usize = 0x0400;
 pub const EXT4_FEATURE_RO_COMPAT_REPLICA: usize = 0x0800;
 pub const EXT4_FEATURE_RO_COMPAT_READONLY: usize = 0x1000;
-pub const EXT4_FEATURE_RO_COMPAT_PROJECT: usize = 0x2000 ;
+pub const EXT4_FEATURE_RO_COMPAT_PROJECT: usize = 0x2000;
 ///   Needs recovery 
 pub const EXT4_FEATURE_RO_COMPAT_SHARED_BLOCKS: usize = 0x4000;
 pub const EXT4_FEATURE_RO_COMPAT_VERITY: usize = 0x8000;
 
 pub const EXT2_FEATURE_INCOMPAT_COMPRESSION: usize = 0x0001;
 pub const EXT2_FEATURE_INCOMPAT_FILETYPE: usize = 0x0002;
-pub const EXT3_FEATURE_INCOMPAT_RECOVER: usize = 0x0004     ;
+pub const EXT3_FEATURE_INCOMPAT_RECOVER: usize = 0x0004;
 ///   Journal device 
-pub const EXT3_FEATURE_INCOMPAT_JOURNAL_DEV: usize = 0x0008 ;
+pub const EXT3_FEATURE_INCOMPAT_JOURNAL_DEV: usize = 0x0008;
 ///   >2GB or 3-lvl htree 
 pub const EXT2_FEATURE_INCOMPAT_META_BG: usize = 0x0010;
 pub const EXT3_FEATURE_INCOMPAT_EXTENTS: usize = 0x0040;
@@ -922,9 +925,9 @@ pub const EXT4_FEATURE_INCOMPAT_FLEX_BG: usize = 0x0200;
 pub const EXT4_FEATURE_INCOMPAT_EA_INODE: usize = 0x0400;
 pub const EXT4_FEATURE_INCOMPAT_DIRDATA: usize = 0x1000;
 pub const EXT4_FEATURE_INCOMPAT_CSUM_SEED: usize = 0x2000;
-pub const EXT4_FEATURE_INCOMPAT_LARGEDIR: usize = 0x4000    ;
+pub const EXT4_FEATURE_INCOMPAT_LARGEDIR: usize = 0x4000;
 ///   data in inode 
-pub const EXT4_FEATURE_INCOMPAT_INLINE_DATA: usize = 0x8000 ;
+pub const EXT4_FEATURE_INCOMPAT_INLINE_DATA: usize = 0x8000;
 pub const EXT4_FEATURE_INCOMPAT_ENCRYPT: usize = 0x10000;
 pub const EXT4_FEATURE_INCOMPAT_CASEFOLD: usize = 0x20000;
 
@@ -976,9 +979,10 @@ impl Ext2DirEntry {
         assert!(name_bytes.len() < EXT2_NAME_LEN);
         name_u8[..name_bytes.len()].copy_from_slice(name_bytes);
         assert!(name.len() < 256, "Too long filename!");
+        let rec_len = up_align(4 + 2 + 1 + 1 + name.len(), 2) as u16;
         Self {
             inode: inode as u32,
-            rec_len: (4 + 2 + 1 + 1 + name.len()) as u16,
+            rec_len,
             name_len: name.len() as u8,
             file_type,
             name: name_u8,
@@ -1097,18 +1101,18 @@ pub const EXT4_NSEC_MASK: usize = !(0 as usize) << EXT4_EPOCH_BITS;
  * for the convenience of the sysadmin and not for automatic validation.
  *
  * Note: Only the mmp_seq value is used to determine whether the MMP block
- *	is being updated.  The mmp_time, mmp_nodename, and mmp_bdevname
- *	fields are only for informational purposes for the administrator,
- *	due to clock skew between nodes and hostname HA service takeover.
+ *    is being updated.  The mmp_time, mmp_nodename, and mmp_bdevname
+ *    fields are only for informational purposes for the administrator,
+ *    due to clock skew between nodes and hostname HA service takeover.
  */
 ///   ASCII for MMP 
-pub const EXT4_MMP_MAGIC: usize = 0x004D4D50     ;
+pub const EXT4_MMP_MAGIC: usize = 0x004D4D50;
 ///   mmp_seq value for clean unmount 
-pub const EXT4_MMP_SEQ_CLEAN: usize = 0xFF4D4D50 ;
+pub const EXT4_MMP_SEQ_CLEAN: usize = 0xFF4D4D50;
 ///   mmp_seq value when being fscked 
-pub const EXT4_MMP_SEQ_FSCK: usize = 0xE24D4D50  ;
+pub const EXT4_MMP_SEQ_FSCK: usize = 0xE24D4D50;
 ///   maximum valid mmp_seq value 
-pub const EXT4_MMP_SEQ_MAX: usize = 0xE24D4D4F   ;
+pub const EXT4_MMP_SEQ_MAX: usize = 0xE24D4D4F;
 
 /* Not endian-annotated; it's swapped at read/write time */
 struct MmpStruct {
@@ -1158,6 +1162,6 @@ pub const EXT4_INLINE_DATA_DOTDOT_SIZE: usize = 4;
 
 pub const EXT4_ENC_UTF8_12_1: usize = 1;
 
-pub const EXT4_ENC_STRICT_MODE_FL: usize = 1 << 0 ;
+pub const EXT4_ENC_STRICT_MODE_FL: usize = 1 << 0;
 
 
