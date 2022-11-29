@@ -242,7 +242,7 @@ dependencies = [
 [[package]]
 name = "fuse"
 version = "0.4.0-dev"
-source = "git+https://github.com/zargony/fuse-rs#39fde4a5c47ce370d228ac190f950bd835db7f47"
+source = "git+https://github.com/chiro2001/fuse-rs#01c90c20d17a75d5ea092f29e5b33ac326736866"
 dependencies = [
  "fuse-abi",
  "fuse-sys",
@@ -254,12 +254,12 @@ dependencies = [
 [[package]]
 name = "fuse-abi"
 version = "0.4.0-dev"
-source = "git+https://github.com/zargony/fuse-rs#39fde4a5c47ce370d228ac190f950bd835db7f47"
+source = "git+https://github.com/chiro2001/fuse-rs#01c90c20d17a75d5ea092f29e5b33ac326736866"
 
 [[package]]
 name = "fuse-sys"
 version = "0.4.0-dev"
-source = "git+https://github.com/zargony/fuse-rs#39fde4a5c47ce370d228ac190f950bd835db7f47"
+source = "git+https://github.com/chiro2001/fuse-rs#01c90c20d17a75d5ea092f29e5b33ac326736866"
 dependencies = [
  "pkg-config",
 ]
