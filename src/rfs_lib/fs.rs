@@ -13,7 +13,7 @@ use libc::ENOENT;
 use log::*;
 use crate::{FORCE_FORMAT, prv, rep, rep_mut};
 use crate::rfs_lib::desc::{EXT2_ROOT_INO, Ext2GroupDesc, Ext2INode,
-                           Ext2SuperBlock, Ext2DirEntry, Ext2FileType};
+                           Ext2SuperBlock, Ext2FileType};
 use crate::rfs_lib::{TTL, RFS};
 use crate::rfs_lib::utils::*;
 

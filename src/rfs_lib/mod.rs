@@ -1,6 +1,5 @@
 /// Filesystem logics
 use std::cmp::max;
-use std::iter;
 use std::mem::size_of;
 use std::time::Duration;
 pub use disk_driver;
@@ -301,7 +300,7 @@ impl RFS {
         // m = log2(block_size / 4) = log2(layer), x / a == x >> m
         let m = self.super_block.s_log_block_size as usize + 10 - 2;
         let layer_size = self.block_size() / 4;
-        let layer_size_mask = (layer_size * 4) - 1;
+        // let layer_size_mask = (layer_size * 4) - 1;
         let mut data_block = self.create_block_vec();
         let mut buf_u32 = [0 as u8; 4];
         self.read_data_block(start_block, &mut data_block)?;
@@ -516,7 +515,7 @@ impl RFS {
         let file_type: usize = node_type.clone().into();
         let mut inode_parent = self.get_inode(parent as usize)?;
         // search inode bitmap for free inode
-        let mut ino_free = Self::bitmap_search(&self.bitmap_inode)?;
+        let ino_free = Self::bitmap_search(&self.bitmap_inode)?;
         // ino_free += 1;
         Self::bitmap_set(&mut self.bitmap_inode, ino_free);
         // save bitmap
