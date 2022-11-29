@@ -25,17 +25,6 @@ use mem::*;
 use desc::*;
 use crate::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, prv};
 
-#[cxx::bridge]
-mod ffi {
-    extern "Rust" {
-        fn add(left: usize, right: usize) -> usize;
-    }
-}
-
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
 /// Data TTL, 1 second default
 const TTL: Duration = Duration::from_secs(1);
 
@@ -1246,16 +1235,5 @@ impl RFS {
         let entries = self.get_dir_entries(ino)?.into_iter()
             .skip(offset as usize).collect::<Vec<Ext2DirEntry>>();
         Ok(entries)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
     }
 }
