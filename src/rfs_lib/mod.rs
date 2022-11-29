@@ -194,6 +194,8 @@ impl RFS {
     /// Read inode struct according to ino number
     pub fn get_inode(self: &mut Self, ino: usize) -> Result<Ext2INode> {
         let (block_number, offset) = self.fetch_inode_block_offset(ino)?;
+        debug!("get_inode: inode {} at block {} offset {:x}, disk offset is {:x}",
+            ino, block_number, offset, block_number * self.block_size());
         let mut buf = self.create_block_vec();
         self.seek_block(block_number)?;
         self.read_block(&mut buf)?;
@@ -585,7 +587,6 @@ impl RFS {
             let b = *byte;
             for j in 0..8 {
                 if (b >> j) & 0x1 == 0 {
-                    // if b & (1 << j) == 0 {
                     // found free bit, return
                     // return Ok(i * 8 + j);
                     return Ok(i * 8 + j + 1);
@@ -633,8 +634,9 @@ impl RFS {
             if *d != 0 { last_block_i = i; }
         }
         let block_size = self.block_size();
-        let mut init_directory = |entry: &mut Ext2DirEntry, inode: &Ext2INode|
+        let mut init_directory = |entry: &mut Ext2DirEntry, inode: &Ext2INode, data_block_free: usize|
                                   -> Result<(Vec<u8>, Ext2INode)> {
+            warn!("init_directory for ino {}", ino_free);
             let mut inode = inode.clone();
             inode.i_blocks = 1;
             inode.i_size = block_size as u32;
@@ -681,10 +683,19 @@ impl RFS {
         };
         if last_block_i == usize::MAX {
             if node_type == Ext2FileType::Directory {
-                warn!("data block is empty, creating a block for this directory");
-                let dir_entry_block_data = init_directory(&mut entry, &inode)?;
-                inode = dir_entry_block_data.1;
-                self.write_data_block(data_block_free, &dir_entry_block_data.0)?;
+                warn!("parent inode data block is empty, creating a block for this directory");
+                let parent_data_block_free = self.allocate_block()?;
+                if inode_parent.i_blocks == 0 && inode_parent.i_size == 0 && inode_parent.i_mode == 0 {
+                    debug!("inode_parent is empty, use default value");
+                    inode_parent = Ext2INode::default();
+                    inode_parent.i_size = block_size as u32;
+                    inode_parent.i_blocks = 1;
+                    inode_parent.i_mode = (0755 | (file_type << 12)) as u16;
+                }
+                let dir_entry_block_data = init_directory(&mut entry, &inode_parent, parent_data_block_free)?;
+                inode_parent = dir_entry_block_data.1;
+                warn!("after update, inode parent: {:?}", inode_parent);
+                self.write_data_block(parent_data_block_free, &dir_entry_block_data.0)?;
                 last_block_i = 0;
             } else {
                 panic!("data block is empty");
@@ -773,8 +784,9 @@ impl RFS {
             Ext2FileType::Directory => {
                 debug!("is directory, creating directory entries at block {}", data_block_free);
                 debug!("set self size to one block...");
-                let dir_entry_block_data = init_directory(&mut entry, &inode)?;
+                let dir_entry_block_data = init_directory(&mut entry, &inode, data_block_free)?;
                 inode = dir_entry_block_data.1;
+                warn!("after update, inode: {:?}", inode);
                 self.write_data_block(data_block_free, &dir_entry_block_data.0)?;
             }
             Ext2FileType::RegularFile => {

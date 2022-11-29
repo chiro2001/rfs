@@ -125,6 +125,8 @@ impl Filesystem for RFS {
                     let mut data = vec![];
                     file.read_to_end(&mut data).unwrap();
                     layout_string = String::from_utf8(data).unwrap();
+                } else {
+                    warn!("fs.layout({}) not found! use default layout: {}", path.to_str().unwrap(), default_layout_str);
                 }
                 let lines = layout_string.lines();
                 let mut layout = FsLayoutArgs::default();
@@ -197,11 +199,20 @@ impl Filesystem for RFS {
                         self.group_desc_table.clear();
                         self.group_desc_table.push(group);
                         ret(self.seek_block(0))?;
+                        // clear disk
+                        let block_data = self.create_block_vec();
+                        // for i in 0..self.disk_size() / self.block_size() {
+                        for i in 0..6 {
+                            ret(self.write_data_block(i, &block_data))?;
+                        }
+                        ret(self.seek_block(0))?;
                         if layout.boot { ret(self.seek_block(1))?; }
-                        // write super_block
+                        debug!("write super_block");
                         let mut block_data = self.create_block_vec();
                         block_data[..size_of::<Ext2SuperBlock>()].copy_from_slice(unsafe { serialize_row(&super_block) });
                         ret(self.write_block(&block_data))?;
+
+                        debug!("write group_desc");
                         ret(self.seek_block(self.super_block.s_first_data_block as usize + self.filesystem_first_block))?;
                         let mut block_data = self.create_block_vec();
                         block_data[..size_of::<Ext2GroupDesc>()].copy_from_slice(unsafe { serialize_row(&self.group_desc_table[0]) });
@@ -224,8 +235,8 @@ impl Filesystem for RFS {
                         self.bitmap_inode.extend_from_slice(&bitmap_inode);
 
                         // create root directory
-                        ret(self.make_node(EXT2_ROOT_INO, ".", 0xfff, Ext2FileType::Directory))?;
                         ret(self.make_node(EXT2_ROOT_INO, "..", 0xfff, Ext2FileType::Directory))?;
+                        ret(self.make_node(EXT2_ROOT_INO, ".", 0xfff, Ext2FileType::Directory))?;
                     }
                 }
             }
@@ -249,6 +260,8 @@ impl Filesystem for RFS {
         debug!("block bitmap at {} block", bg_block_bitmap);
         ret(self.seek_block(bg_block_bitmap))?;
         let mut bitmap_data_block = self.create_block_vec();
+        // ino 1 and 2 reserved
+        bitmap_data_block[0] = 0x3;
         ret(self.read_block(&mut bitmap_data_block))?;
         debug!("block bit map: {:?}", &bitmap_data_block[..32]);
         self.bitmap_data.clear();
