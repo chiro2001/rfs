@@ -43,6 +43,18 @@ pub struct RFSBase {
     pub root_dir: Ext2INode,
 }
 
+impl RFSBase {
+    pub fn set(&mut self, d: Self) {
+        self.driver_info = d.driver_info;
+        self.super_block = d.super_block;
+        self.group_desc_table = d.group_desc_table;
+        self.filesystem_first_block = d.filesystem_first_block;
+        self.bitmap_inode = d.bitmap_inode;
+        self.bitmap_data = d.bitmap_data;
+        self.root_dir = d.root_dir;
+    }
+}
+
 // #[derive(ApplyMemType, Default)]
 // #[ApplyMemTo(RFSBase)]
 // #[ApplyMemType(T)]
