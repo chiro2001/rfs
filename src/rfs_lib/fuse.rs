@@ -26,36 +26,21 @@ impl Filesystem for RFS {
     }
 
     fn destroy(&mut self, _req: &Request<'_>) {
-        self.driver.ddriver_close().unwrap();
+        self.rfs_destroy().unwrap();
     }
 
     fn lookup(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEntry) {
         prv!("lookup", parent, name);
-        let parent = RFS::shift_ino(parent);
-        rep!(reply, entries, self.get_dir_entries(parent));
-        for d in entries {
-            debug!("dir entry [{}] {} type {}", d.inode, d.get_name(), d.file_type);
-            if d.get_name() == name.to_str().unwrap() {
-                match self.get_inode(d.inode as usize) {
-                    Ok(r) => {
-                        let attr = r.to_attr(d.inode as usize);
-                        debug!("file {} == {} found! attr: {:?}", name.to_str().unwrap(), d.get_name(), attr);
-                        reply.entry(&TTL, &attr, 0);
-                        return;
-                    }
-                    Err(_) => {
-                        reply.error(ENOENT);
-                        return;
-                    }
-                };
-            }
-        }
-        reply.error(ENOENT);
+        rep!(reply, r, self.rfs_lookup(parent as usize, name.to_str().unwrap()));
+        let (ino, inode) = r;
+        let attr = inode.to_attr(ino as usize);
+        debug!("file {} found! attr: {:?}", name.to_str().unwrap(), attr);
+        reply.entry(&TTL, &attr, 0);
     }
 
     fn getattr(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyAttr) {
         prv!("getattr", ino);
-        let ino = RFS::shift_ino(ino);
+        let ino = RFS::shift_ino(ino as usize);
         rep!(reply, node, self.get_inode(ino));
         let attr = node.to_attr(ino);
         prv!(attr);
@@ -68,7 +53,7 @@ impl Filesystem for RFS {
                _crtime: Option<SystemTime>, chgtime: Option<SystemTime>,
                bkuptime: Option<SystemTime>, flags: Option<u32>, reply: ReplyAttr) {
         prv!("setattr", ino, atime, mtime, size);
-        let ino = RFS::shift_ino(ino);
+        let ino = RFS::shift_ino(ino as usize);
         rep_mut!(reply, node, self.get_inode(ino));
         match mode {
             Some(v) => node.i_mode = v as u16,
@@ -145,7 +130,7 @@ impl Filesystem for RFS {
         let mut offset = offset as usize;
         let size = size as usize;
         let sz = self.block_size();
-        let ino = RFS::shift_ino(ino);
+        let ino = RFS::shift_ino(ino as usize);
         let mut blocks: Vec<usize> = vec![];
         let start_index = offset / self.block_size();
         assert_eq!(offset % self.block_size(), 0);
@@ -196,7 +181,7 @@ impl Filesystem for RFS {
         let mut offset = offset as usize;
         let base = offset;
         let sz = self.block_size();
-        let ino = RFS::shift_ino(ino);
+        let ino = RFS::shift_ino(ino as usize);
         let start_index = offset as usize / self.block_size();
         assert_eq!(offset % self.block_size(), 0);
 
@@ -252,7 +237,7 @@ impl Filesystem for RFS {
 
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
         prv!("readdir", ino, offset);
-        let ino = RFS::shift_ino(ino);
+        let ino = RFS::shift_ino(ino as usize);
         rep!(reply, entries, self.get_dir_entries(ino));
         for (i, d) in entries.iter().enumerate().skip(offset as usize) {
             rep!(reply, inode, self.get_inode(d.inode as usize));

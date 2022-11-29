@@ -564,7 +564,8 @@ impl RFS {
     }
 
     /// reserved for compatibility
-    pub fn shift_ino(ino: u64) -> usize {
+    // pub fn shift_ino(ino: u64) -> usize {
+    pub fn shift_ino(ino: usize) -> usize {
         // if ino == 1 { EXT2_ROOT_INO } else { ino as usize }
         // if ino == 1 { 0 } else { ino as usize }
         // (ino + 1) as usize
@@ -624,7 +625,7 @@ impl RFS {
         }
         let block_size = self.block_size();
         let init_directory = |entry: &mut Ext2DirEntry, inode: &Ext2INode, data_block_free: usize|
-                                  -> Result<(Vec<u8>, Ext2INode)> {
+                              -> Result<(Vec<u8>, Ext2INode)> {
             debug!("init_directory for ino {}", ino_free);
             let mut inode = inode.clone();
             inode.i_blocks = 1;
@@ -1058,6 +1059,22 @@ impl RFS {
         self.print_stats();
         debug!("Init done.");
         Ok(())
+    }
+
+    pub fn rfs_destroy(&mut self) -> Result<()> {
+        self.driver.ddriver_close()
+    }
+
+    pub fn rfs_lookup(&mut self, parent: usize, name: &str) -> Result<(usize, Ext2INode)> {
+        let parent = RFS::shift_ino(parent);
+        let entries = self.get_dir_entries(parent)?;
+        for d in entries {
+            debug!("dir entry [{}] {} type {}", d.inode, d.get_name(), d.file_type);
+            if d.get_name() == name {
+                return Ok((d.inode as usize, self.get_inode(d.inode as usize)?));
+            }
+        }
+        Err(anyhow!("file not found"))
     }
 }
 
