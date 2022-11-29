@@ -28,8 +28,8 @@ use crate::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, prv};
 /// Data TTL, 1 second default
 const TTL: Duration = Duration::from_secs(1);
 
-pub struct RFS {
-    pub driver: Option<Box<dyn DiskDriver>>,
+pub struct RFS<T: DiskDriver> {
+    pub driver: T,
     pub driver_info: DiskInfo,
     pub super_block: Ext2SuperBlockMem,
     pub group_desc_table: Vec<Ext2GroupDesc>,
@@ -42,12 +42,12 @@ pub struct RFS {
     pub root_dir: Ext2INode,
 }
 
-impl RFS {
+impl<T: DiskDriver> RFS<T> {
     /// Create RFS object from selected DiskDriver
     #[allow(dead_code)]
-    pub fn new(driver: Box<dyn DiskDriver>) -> Self {
+    pub fn new(driver: T) -> Self {
         Self {
-            driver: Some(driver),
+            driver,
             driver_info: Default::default(),
             super_block: Default::default(),
             group_desc_table: vec![],
@@ -67,8 +67,8 @@ impl RFS {
     /// Get filesystem block size, available after init
     fn block_size(&self) -> usize { (1 << self.super_block.s_log_block_size) * 0x400 as usize }
 
-    pub fn get_driver(&mut self) -> &mut Box<dyn DiskDriver> {
-        self.driver.as_mut().unwrap()
+    pub fn get_driver(&mut self) -> &mut T {
+        &mut self.driver
     }
 
     /// Read one disk block
@@ -273,7 +273,7 @@ impl RFS {
         // let offset = offset as usize;
         // let size = size as usize;
         // let sz = self.block_size();
-        // let ino = RFS::shift_ino(ino);
+        // let ino = RFS::<T>::shift_ino(ino);
         //
         // let mut blocks: Vec<usize> = vec![];
         //
@@ -1058,7 +1058,7 @@ impl RFS {
     }
 
     pub fn rfs_lookup(&mut self, parent: usize, name: &str) -> Result<(usize, Ext2INode)> {
-        let parent = RFS::shift_ino(parent);
+        let parent = RFS::<T>::shift_ino(parent);
         let entries = self.get_dir_entries(parent)?;
         for d in entries {
             debug!("dir entry [{}] {} type {}", d.inode, d.get_name(), d.file_type);
@@ -1074,7 +1074,7 @@ impl RFS {
                        atime: Option<SystemTime>, mtime: Option<SystemTime>,
                        chgtime: Option<SystemTime>,
                        bkuptime: Option<SystemTime>, flags: Option<u32>) -> Result<Ext2INode> {
-        let ino = RFS::shift_ino(ino as usize);
+        let ino = RFS::<T>::shift_ino(ino as usize);
         let mut node = self.get_inode(ino)?;
         match mode {
             Some(v) => node.i_mode = v as u16,
@@ -1131,7 +1131,7 @@ impl RFS {
         let mut offset = offset as usize;
         let size = size as usize;
         let sz = self.block_size();
-        let ino = RFS::shift_ino(ino as usize);
+        let ino = RFS::<T>::shift_ino(ino as usize);
         let mut blocks: Vec<usize> = vec![];
         let start_index = offset / self.block_size();
         assert_eq!(offset % self.block_size(), 0);
@@ -1179,7 +1179,7 @@ impl RFS {
         let mut offset = offset as usize;
         let base = offset;
         let sz = self.block_size();
-        let ino = RFS::shift_ino(ino as usize);
+        let ino = RFS::<T>::shift_ino(ino as usize);
         let start_index = offset as usize / self.block_size();
         assert_eq!(offset % self.block_size(), 0);
 
@@ -1234,7 +1234,7 @@ impl RFS {
     }
 
     pub fn rfs_readdir(&mut self, ino: u64, offset: i64) -> Result<Vec<Ext2DirEntry>> {
-        let ino = RFS::shift_ino(ino as usize);
+        let ino = RFS::<T>::shift_ino(ino as usize);
         let entries = self.get_dir_entries(ino)?.into_iter()
             .skip(offset as usize).collect::<Vec<Ext2DirEntry>>();
         Ok(entries)

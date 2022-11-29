@@ -102,7 +102,7 @@ fn main() -> Result<()> {
         Ok(Fork::Child) => {
             match retry_with_index(Fixed::from_millis(100), |current_try| {
                 info!("[try {}/{}] Mount to {}", current_try, retry_times, abspath_mountpoint);
-                let res = fuse::mount(RFS::new(Box::new(FileDiskDriver::new(""))), abspath_mountpoint, &options);
+                let res = fuse::mount(RFS::new(FileDiskDriver::new("")), abspath_mountpoint, &options);
                 match res {
                     Ok(_) => {
                         info!("All Done.");

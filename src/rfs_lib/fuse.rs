@@ -1,6 +1,7 @@
 /// FUSE operations.
 use std::ffi::OsStr;
 use std::time::SystemTime;
+use disk_driver::DiskDriver;
 use fuse::{Filesystem, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyWrite, Request};
 use libc::{c_int, ENOENT};
 use log::*;
@@ -8,7 +9,7 @@ use crate::rfs_lib::desc::Ext2FileType;
 use crate::rfs_lib::{TTL, RFS, DEVICE_FILE};
 use crate::rfs_lib::utils::*;
 
-impl Filesystem for RFS {
+impl<T: DiskDriver> Filesystem for RFS<T> {
     fn init(&mut self, _req: &Request<'_>) -> Result<(), c_int> {
         let file = DEVICE_FILE.read().unwrap().clone();
         ret(self.rfs_init(&file))
@@ -29,7 +30,7 @@ impl Filesystem for RFS {
 
     fn getattr(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyAttr) {
         prv!("getattr", ino);
-        let ino = RFS::shift_ino(ino as usize);
+        let ino = RFS::<T>::shift_ino(ino as usize);
         rep!(reply, node, self.get_inode(ino));
         let attr = node.to_attr(ino);
         prv!(attr);
