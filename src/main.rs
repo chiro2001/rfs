@@ -1,3 +1,4 @@
+use std::env::set_var;
 use std::ffi::OsStr;
 use std::fs;
 use std::process::Stdio;
@@ -19,7 +20,6 @@ mod hello;
 // mod utils;
 
 fn main() -> Result<()> {
-    init_logs();
     let matches = command!() // requires `cargo` feature
         .arg(arg!([mountpoint] "Optional mountpoint to mount on")
             .default_value("tests/mnt"))
@@ -31,6 +31,8 @@ fn main() -> Result<()> {
             .required(false))
         .arg(arg!(-r --read_only "Mount as read only filesystem").action(ArgAction::SetTrue)
             .required(false))
+        .arg(arg!(-v --verbose "Print more debug information, or set `RUST_LOG=debug`").action(ArgAction::SetTrue)
+            .required(false))
         .arg(
             arg!(-d --device <FILE> "Device path (filesystem storage file)")
                 .required(false)
@@ -38,6 +40,10 @@ fn main() -> Result<()> {
         )
         .get_matches();
 
+    if matches.get_flag("verbose") {
+        set_var("RUST_LOG", "debug");
+    }
+    init_logs();
     let mountpoint = matches.get_one::<String>("mountpoint").unwrap();
     let device = matches.get_one::<String>("device").unwrap();
     let path_mountpoint = fs::canonicalize(mountpoint)?;
