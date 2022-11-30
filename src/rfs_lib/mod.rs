@@ -325,6 +325,9 @@ impl<T: DiskDriver> RFS<T> {
     /// Read all directory entries by ino
     pub fn get_dir_entries(&mut self, ino: usize) -> Result<Vec<Ext2DirEntry>> {
         let inode = self.get_inode(ino)?;
+        if inode.i_mode as usize >> 12 != Ext2FileType::Directory.into() {
+            return Err(anyhow!("ino {} is not a directory!", ino));
+        }
         prv!(inode);
         // TODO: walk all blocks, including indirect blocks
         // let offset = offset as usize;
