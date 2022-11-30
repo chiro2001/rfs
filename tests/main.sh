@@ -6,7 +6,7 @@ TEST_CASES=(mount.sh mkdir.sh touch.sh ls.sh remount.sh)
 ALL_TEST_CASES=(mount.sh mkdir.sh touch.sh ls.sh remount.sh rw.sh cp.sh)
 ALL_TEST_SCORES=(1 4 5 4 16 2 2)
 MNTPOINT='./mnt'
-PROJECT_NAME="rfs"
+PROJECT_NAME="rfs_drv"
 
 LEVEL=$1
 
@@ -168,7 +168,7 @@ function register_testcase() {
 ROOT_PATH=$(where_is_script "$0")
 function prepare_esstential_vars() {
     MNTPOINT="$ROOT_PATH"/mnt
-    PROJECT_NAME="rfs"
+    PROJECT_NAME="rfs_drv"
 }
 
 # input: init_tester "${test_cases[@]}"
