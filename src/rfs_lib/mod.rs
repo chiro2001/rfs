@@ -871,9 +871,11 @@ impl<T: DiskDriver> RFS<T> {
         // get and check size
         let mut buf = [0 as u8; 4];
         self.get_driver().ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf)?;
-        self.driver_info.consts.layout_size = u32::from_be_bytes(buf.clone());
+        self.driver_info.consts.layout_size = u32::from_le_bytes(buf.clone());
+        info!("disk layout size: {}", self.driver_info.consts.layout_size);
         self.get_driver().ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf)?;
-        self.driver_info.consts.iounit_size = u32::from_be_bytes(buf.clone());
+        self.driver_info.consts.iounit_size = u32::from_le_bytes(buf.clone());
+        info!("disk unit size: {}", self.driver_info.consts.iounit_size);
         debug!("size of super block struct is {}", size_of::<Ext2SuperBlock>());
         debug!("size of group desc struct is {}", size_of::<Ext2GroupDesc>());
         debug!("size of inode struct is {}", size_of::<Ext2INode>());

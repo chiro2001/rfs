@@ -84,21 +84,21 @@ impl DiskDriver for FileDiskDriver {
     fn ddriver_ioctl(&mut self, cmd: u32, arg: &mut [u8]) -> Result<()> {
         match cmd {
             IOC_REQ_DEVICE_SIZE => {
-                arg[0..4].copy_from_slice(&self.info.consts.layout_size.to_be_bytes());
+                arg[0..4].copy_from_slice(&self.info.consts.layout_size.to_le_bytes());
                 Ok(())
             }
             IOC_REQ_DEVICE_STATE => {
                 assert_eq!(3 * 4, size_of::<DiskStats>());
-                arg[0..4].copy_from_slice(&self.info.stats.write_cnt.to_be_bytes());
-                arg[4..8].copy_from_slice(&self.info.stats.read_cnt.to_be_bytes());
-                arg[8..12].copy_from_slice(&self.info.stats.seek_cnt.to_be_bytes());
+                arg[0..4].copy_from_slice(&self.info.stats.write_cnt.to_le_bytes());
+                arg[4..8].copy_from_slice(&self.info.stats.read_cnt.to_le_bytes());
+                arg[8..12].copy_from_slice(&self.info.stats.seek_cnt.to_le_bytes());
                 Ok(())
             }
             IOC_REQ_DEVICE_RESET => {
                 self.ddriver_reset()
             }
             IOC_REQ_DEVICE_IO_SZ => {
-                arg[0..4].copy_from_slice(&self.info.consts.iounit_size.to_be_bytes());
+                arg[0..4].copy_from_slice(&self.info.consts.iounit_size.to_le_bytes());
                 Ok(())
             }
             _ => Ok(())
