@@ -122,7 +122,7 @@ impl<T: DiskDriver> RFS<T> {
     fn disk_size(&self) -> usize { self.driver_info.consts.layout_size as usize }
 
     /// Get filesystem block size, available after init
-    fn block_size(&self) -> usize { (1 << self.super_block.s_log_block_size) * 0x400 as usize }
+    pub fn block_size(&self) -> usize { (1 << self.super_block.s_log_block_size) * 0x400 as usize }
 
     pub fn get_driver(&mut self) -> &mut T {
         &mut self.driver
