@@ -13,15 +13,14 @@ use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
 use log::*;
 use rfs::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, MOUNT_POINT, RFS};
+use crate::rfs_lib::utils::init_logs;
 
 mod rfs_lib;
 mod hello;
 // mod utils;
 
 fn main() -> Result<()> {
-    let logging_level = std::env::var("RUST_LOG");
-    if logging_level.is_err() { set_var("RUST_LOG", "info"); }
-    env_logger::init();
+    init_logs();
     let matches = command!() // requires `cargo` feature
         .arg(arg!([mountpoint] "Optional mountpoint to mount on")
             .default_value("tests/mnt"))

@@ -8,6 +8,7 @@ use core::slice::{from_raw_parts, from_raw_parts_mut};
 use std::os::raw::c_int;
 use fuse::{ReplyAttr, ReplyData, ReplyDirectory};
 use log::debug;
+use std::env::set_var;
 
 pub trait VecExt {
     /// Casts a `Vec<T>` into a `Vec<U>`.
@@ -258,6 +259,12 @@ pub fn show_hex_debug(data: &[u8], group_size: usize) {
             v.clear();
         }
     }
+}
+
+pub fn init_logs() {
+    let logging_level = std::env::var("RUST_LOG");
+    if logging_level.is_err() { set_var("RUST_LOG", "info"); }
+    env_logger::init();
 }
 
 #[cfg(test)]

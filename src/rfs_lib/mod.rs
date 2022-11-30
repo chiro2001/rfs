@@ -881,7 +881,7 @@ impl<T: DiskDriver> RFS<T> {
         // at lease 32 blocks
         info!("Disk {} has {} IO blocks.", file, self.driver_info.consts.disk_block_count());
         if self.disk_size() < 32 * 0x400 {
-            return Err(anyhow!("Too small disk!"));
+            return Err(anyhow!("Too small disk! disk size is 0x{:x}", self.disk_size()));
         }
         info!("disk info: {:?}", self.driver_info);
         // read super block
