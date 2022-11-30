@@ -1,4 +1,3 @@
-use std::env::set_var;
 use std::ffi::OsStr;
 use std::fs;
 use std::process::Stdio;

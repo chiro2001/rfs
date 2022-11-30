@@ -44,6 +44,7 @@ pub struct RFSBase {
 }
 
 impl RFSBase {
+    #[allow(dead_code)]
     pub fn set(&mut self, d: Self) {
         self.driver_info = d.driver_info;
         self.super_block = d.super_block;
@@ -102,6 +103,7 @@ impl<T: DiskDriver> RFS<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_base(that: RFSBase, driver: T) -> Self {
         Self {
             driver,
