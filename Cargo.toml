@@ -30,12 +30,12 @@ num_enum = "0.5.7"
 crate-type = ["staticlib", "rlib"]
 
 [profile.release]
-debug = true
+#debug = true
 panic = "abort"
 
 [profile.dev]
 panic = "abort"
 
 [[bin]]
-name = "rfs_run"
+name = "rfs"
 path = "src/main.rs"

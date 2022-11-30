@@ -1,14 +1,14 @@
 use anyhow::Result;
 use std::mem::size_of;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct DiskStats {
     pub write_cnt: u32,
     pub read_cnt: u32,
     pub seek_cnt: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct DiskConst {
     pub read_lat: u32,
     pub write_lat: u32,
@@ -19,7 +19,7 @@ pub struct DiskConst {
     pub iounit_size: u32,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Copy, Debug, Clone)]
 pub struct DiskInfo {
     pub stats: DiskStats,
     pub consts: DiskConst,

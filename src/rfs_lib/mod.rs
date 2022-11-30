@@ -12,6 +12,7 @@ use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZ
 use execute::Execute;
 use log::*;
 use num::range_step;
+// use macro_tools::*;
 
 #[macro_use]
 pub mod utils;
@@ -28,8 +29,8 @@ use crate::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, prv};
 /// Data TTL, 1 second default
 const TTL: Duration = Duration::from_secs(1);
 
-pub struct RFS {
-    pub driver: Box<dyn DiskDriver>,
+#[derive(Default, Clone)]
+pub struct RFSBase {
     pub driver_info: DiskInfo,
     pub super_block: Ext2SuperBlockMem,
     pub group_desc_table: Vec<Ext2GroupDesc>,
@@ -42,10 +43,54 @@ pub struct RFS {
     pub root_dir: Ext2INode,
 }
 
-impl RFS {
+impl RFSBase {
+    #[allow(dead_code)]
+    pub fn set(&mut self, d: Self) {
+        self.driver_info = d.driver_info;
+        self.super_block = d.super_block;
+        self.group_desc_table = d.group_desc_table;
+        self.filesystem_first_block = d.filesystem_first_block;
+        self.bitmap_inode = d.bitmap_inode;
+        self.bitmap_data = d.bitmap_data;
+        self.root_dir = d.root_dir;
+    }
+}
+
+// #[derive(ApplyMemType, Default)]
+// #[ApplyMemTo(RFSBase)]
+// #[ApplyMemType(T)]
+pub struct RFS<T: DiskDriver> {
+    pub driver: T,
+    pub driver_info: DiskInfo,
+    pub super_block: Ext2SuperBlockMem,
+    pub group_desc_table: Vec<Ext2GroupDesc>,
+    /// ext2 may has boot reserved 1 block prefix
+    pub filesystem_first_block: usize,
+    /// bitmap in memory
+    pub bitmap_inode: Vec<u8>,
+    pub bitmap_data: Vec<u8>,
+    /// Root directory
+    pub root_dir: Ext2INode,
+}
+
+impl<T: DiskDriver> Into<RFSBase> for RFS<T> {
+    fn into(self) -> RFSBase {
+        RFSBase {
+            driver_info: self.driver_info,
+            super_block: self.super_block,
+            group_desc_table: self.group_desc_table,
+            filesystem_first_block: self.filesystem_first_block,
+            bitmap_inode: self.bitmap_inode,
+            bitmap_data: self.bitmap_data,
+            root_dir: self.root_dir,
+        }
+    }
+}
+
+impl<T: DiskDriver> RFS<T> {
     /// Create RFS object from selected DiskDriver
     #[allow(dead_code)]
-    pub fn new(driver: Box<dyn DiskDriver>) -> Self {
+    pub fn new(driver: T) -> Self {
         Self {
             driver,
             driver_info: Default::default(),
@@ -58,6 +103,20 @@ impl RFS {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn from_base(that: RFSBase, driver: T) -> Self {
+        Self {
+            driver,
+            driver_info: that.driver_info,
+            super_block: that.super_block,
+            group_desc_table: that.group_desc_table,
+            filesystem_first_block: that.filesystem_first_block,
+            bitmap_inode: that.bitmap_inode,
+            bitmap_data: that.bitmap_data,
+            root_dir: that.root_dir,
+        }
+    }
+
     /// Get disk unit, available after init
     fn disk_block_size(&self) -> usize { self.driver_info.consts.iounit_size as usize }
 
@@ -65,13 +124,17 @@ impl RFS {
     fn disk_size(&self) -> usize { self.driver_info.consts.layout_size as usize }
 
     /// Get filesystem block size, available after init
-    fn block_size(&self) -> usize { (1 << self.super_block.s_log_block_size) * 0x400 as usize }
+    pub fn block_size(&self) -> usize { (1 << self.super_block.s_log_block_size) * 0x400 as usize }
+
+    pub fn get_driver(&mut self) -> &mut T {
+        &mut self.driver
+    }
 
     /// Read one disk block
     fn read_disk_block(&mut self, buf: &mut [u8]) -> Result<()> {
         assert_eq!(buf.len(), self.disk_block_size());
         let sz = self.disk_block_size();
-        self.driver.ddriver_read(buf, sz)?;
+        self.get_driver().ddriver_read(buf, sz)?;
         Ok(())
     }
 
@@ -79,7 +142,7 @@ impl RFS {
     fn write_disk_block(&mut self, buf: &[u8]) -> Result<()> {
         assert_eq!(buf.len(), self.disk_block_size());
         let sz = self.disk_block_size();
-        self.driver.ddriver_write(buf, sz)?;
+        self.get_driver().ddriver_write(buf, sz)?;
         Ok(())
     }
 
@@ -101,7 +164,7 @@ impl RFS {
     fn seek_disk_block(&mut self, index: usize) -> Result<()> {
         let sz = self.disk_block_size();
         // info!("DISK seek to {:x}", index * sz);
-        let _n = self.driver.ddriver_seek((index * sz) as i64, SeekType::Set)?;
+        let _n = self.get_driver().ddriver_seek((index * sz) as i64, SeekType::Set)?;
         Ok(())
     }
 
@@ -264,12 +327,15 @@ impl RFS {
     /// Read all directory entries by ino
     pub fn get_dir_entries(&mut self, ino: usize) -> Result<Vec<Ext2DirEntry>> {
         let inode = self.get_inode(ino)?;
+        if inode.i_mode as usize >> 12 != Ext2FileType::Directory.into() {
+            return Err(anyhow!("ino {} is not a directory!", ino));
+        }
         prv!(inode);
         // TODO: walk all blocks, including indirect blocks
         // let offset = offset as usize;
         // let size = size as usize;
         // let sz = self.block_size();
-        // let ino = RFS::shift_ino(ino);
+        // let ino = RFS::<T>::shift_ino(ino);
         //
         // let mut blocks: Vec<usize> = vec![];
         //
@@ -806,13 +872,15 @@ impl RFS {
     }
 
     pub fn rfs_init(&mut self, file: &str) -> Result<()> {
-        self.driver.ddriver_open(file)?;
+        self.get_driver().ddriver_open(file)?;
         // get and check size
         let mut buf = [0 as u8; 4];
-        self.driver.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf)?;
-        self.driver_info.consts.layout_size = u32::from_be_bytes(buf.clone());
-        self.driver.ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf)?;
-        self.driver_info.consts.iounit_size = u32::from_be_bytes(buf.clone());
+        self.get_driver().ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf)?;
+        self.driver_info.consts.layout_size = u32::from_le_bytes(buf.clone());
+        info!("disk layout size: {}", self.driver_info.consts.layout_size);
+        self.get_driver().ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf)?;
+        self.driver_info.consts.iounit_size = u32::from_le_bytes(buf.clone());
+        info!("disk unit size: {}", self.driver_info.consts.iounit_size);
         debug!("size of super block struct is {}", size_of::<Ext2SuperBlock>());
         debug!("size of group desc struct is {}", size_of::<Ext2GroupDesc>());
         debug!("size of inode struct is {}", size_of::<Ext2INode>());
@@ -820,7 +888,7 @@ impl RFS {
         // at lease 32 blocks
         info!("Disk {} has {} IO blocks.", file, self.driver_info.consts.disk_block_count());
         if self.disk_size() < 32 * 0x400 {
-            return Err(anyhow!("Too small disk!"));
+            return Err(anyhow!("Too small disk! disk size is 0x{:x}", self.disk_size()));
         }
         info!("disk info: {:?}", self.driver_info);
         // read super block
@@ -845,7 +913,7 @@ impl RFS {
             if mkfs {
                 // let's use mkfs.ext2
                 debug!("close driver");
-                self.driver.ddriver_close()?;
+                self.get_driver().ddriver_close()?;
                 // create file
                 let mut command = execute::command_args!("dd", format!("of={}", file), "if=/dev/zero",
                 format!("bs={}", self.disk_block_size()),
@@ -859,7 +927,7 @@ impl RFS {
                 let output = command.execute_output().unwrap();
                 info!("{}", String::from_utf8(output.stdout).unwrap());
                 // reload disk driver
-                self.driver.ddriver_open(&file)?;
+                self.get_driver().ddriver_open(&file)?;
                 self.seek_block(0)?;
                 self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
                 super_block = unsafe { deserialize_row(&data_blocks_head) };
@@ -1050,11 +1118,11 @@ impl RFS {
     }
 
     pub fn rfs_destroy(&mut self) -> Result<()> {
-        self.driver.ddriver_close()
+        self.get_driver().ddriver_close()
     }
 
     pub fn rfs_lookup(&mut self, parent: usize, name: &str) -> Result<(usize, Ext2INode)> {
-        let parent = RFS::shift_ino(parent);
+        let parent = RFS::<T>::shift_ino(parent);
         let entries = self.get_dir_entries(parent)?;
         for d in entries {
             debug!("dir entry [{}] {} type {}", d.inode, d.get_name(), d.file_type);
@@ -1070,7 +1138,7 @@ impl RFS {
                        atime: Option<SystemTime>, mtime: Option<SystemTime>,
                        chgtime: Option<SystemTime>,
                        bkuptime: Option<SystemTime>, flags: Option<u32>) -> Result<Ext2INode> {
-        let ino = RFS::shift_ino(ino as usize);
+        let ino = RFS::<T>::shift_ino(ino as usize);
         let mut node = self.get_inode(ino)?;
         match mode {
             Some(v) => node.i_mode = v as u16,
@@ -1127,7 +1195,7 @@ impl RFS {
         let mut offset = offset as usize;
         let size = size as usize;
         let sz = self.block_size();
-        let ino = RFS::shift_ino(ino as usize);
+        let ino = RFS::<T>::shift_ino(ino as usize);
         let mut blocks: Vec<usize> = vec![];
         let start_index = offset / self.block_size();
         assert_eq!(offset % self.block_size(), 0);
@@ -1175,7 +1243,7 @@ impl RFS {
         let mut offset = offset as usize;
         let base = offset;
         let sz = self.block_size();
-        let ino = RFS::shift_ino(ino as usize);
+        let ino = RFS::<T>::shift_ino(ino as usize);
         let start_index = offset as usize / self.block_size();
         assert_eq!(offset % self.block_size(), 0);
 
@@ -1230,7 +1298,7 @@ impl RFS {
     }
 
     pub fn rfs_readdir(&mut self, ino: u64, offset: i64) -> Result<Vec<Ext2DirEntry>> {
-        let ino = RFS::shift_ino(ino as usize);
+        let ino = RFS::<T>::shift_ino(ino as usize);
         let entries = self.get_dir_entries(ino)?.into_iter()
             .skip(offset as usize).collect::<Vec<Ext2DirEntry>>();
         Ok(entries)

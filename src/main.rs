@@ -13,15 +13,13 @@ use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
 use log::*;
 use rfs::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, MOUNT_POINT, RFS};
+use crate::rfs_lib::utils::init_logs;
 
 mod rfs_lib;
 mod hello;
 // mod utils;
 
 fn main() -> Result<()> {
-    let logging_level = std::env::var("RUST_LOG");
-    if logging_level.is_err() { set_var("RUST_LOG", "info"); }
-    env_logger::init();
     let matches = command!() // requires `cargo` feature
         .arg(arg!([mountpoint] "Optional mountpoint to mount on")
             .default_value("tests/mnt"))
@@ -33,6 +31,8 @@ fn main() -> Result<()> {
             .required(false))
         .arg(arg!(-r --read_only "Mount as read only filesystem").action(ArgAction::SetTrue)
             .required(false))
+        .arg(arg!(-v --verbose "Print more debug information, or set `RUST_LOG=debug`").action(ArgAction::SetTrue)
+            .required(false))
         .arg(
             arg!(-d --device <FILE> "Device path (filesystem storage file)")
                 .required(false)
@@ -40,6 +40,10 @@ fn main() -> Result<()> {
         )
         .get_matches();
 
+    if matches.get_flag("verbose") {
+        set_var("RUST_LOG", "debug");
+    }
+    init_logs();
     let mountpoint = matches.get_one::<String>("mountpoint").unwrap();
     let device = matches.get_one::<String>("device").unwrap();
     let path_mountpoint = fs::canonicalize(mountpoint)?;
@@ -102,7 +106,7 @@ fn main() -> Result<()> {
         Ok(Fork::Child) => {
             match retry_with_index(Fixed::from_millis(100), |current_try| {
                 info!("[try {}/{}] Mount to {}", current_try, retry_times, abspath_mountpoint);
-                let res = fuse::mount(RFS::new(Box::new(FileDiskDriver::new(""))), abspath_mountpoint, &options);
+                let res = fuse::mount(RFS::new(FileDiskDriver::new("")), abspath_mountpoint, &options);
                 match res {
                     Ok(_) => {
                         info!("All Done.");
