@@ -294,8 +294,8 @@ impl<T: DiskDriver> RFS<T> {
         if buf.len() % self.block_size() == 0 {
             self.write_block(buf)?;
         } else {
-            debug!("write part of one block, read and update; source buf:");
-            show_hex_debug(buf, 16);
+            // debug!("write part of one block, read and update; source buf:");
+            // show_hex_debug(buf, 16);
             let mut block_data = self.create_block_vec();
             self.read_data_block(block, &mut block_data)?;
             block_data[..buf.len()].copy_from_slice(buf);
@@ -527,9 +527,9 @@ impl<T: DiskDriver> RFS<T> {
             loop {
                 let block_number = inode.i_block[12] as usize;
                 if layer_index[0] != block_number && block_number != 0 {
-                    debug!("saving layer index data at block {}", layer_index[0]);
+                    debug!("L1: saving layer index data at block {}", layer_index[0]);
                     dump_index_table!(0);
-                    debug!("getting layer index data for new block {}", block_number);
+                    debug!("L1: getting layer index data for new block {}", block_number);
                     self.read_data_block(block_number, &mut layer_data[0])?;
                     layer_index[0] = block_number;
                 }
@@ -563,33 +563,94 @@ impl<T: DiskDriver> RFS<T> {
                 }
             }
         }
-        debug!("saving layer index data at block {}", layer_index[0]);
+        debug!("L1: saving layer index data at block {}", layer_index[0]);
         dump_index_table!(0);
         // 13 -> L2
-        for i in range_step(self.threshold(1), self.threshold(2), layer_size) {
-            let block_number = inode.i_block[13] as usize;
-            if layer_index[0] != block_number {
-                dump_index_table!(0);
-                self.read_data_block(block_number, &mut layer_data[0])?;
-                layer_index[0] = block_number;
+        warn!("L2!");
+        for i in max(block_index, self.threshold(1))..self.threshold(2) {
+            let base_block_number = inode.i_block[13];
+            if base_block_number == 0 {
+                // alloc block for layer index data
+                let new_layer_block = self.allocate_block()?;
+                inode.i_block[13] = new_layer_block as u32;
+                debug!("new_block for layer index block: {}", new_layer_block);
+                // clear data
+                let layer_index_data = self.create_block_vec();
+                self.write_data_block(new_layer_block, &layer_index_data)?;
+                self.read_data_block(base_block_number as usize, &mut layer_data[0])?;
+                layer_index[0] = base_block_number as usize;
             }
-            let offset = ((i - self.threshold(1)) << 2) / layer_size;
-            buf_u32.copy_from_slice(&layer_data[0][offset..offset + 4]);
-            let block = u32::from_be_bytes(buf_u32.clone()) as usize;
-
-            for j in i..i + layer_size {
-                if block_index > j { continue; }
-                let block_number = block;
-                if layer_index[1] != block_number {
-                    dump_index_table!(1);
-                    self.read_data_block(block_number, &mut layer_data[1])?;
-                    layer_index[1] = block_number;
-                }
-                let offset = ((j - 12) % layer_size) << 2;
-                buf_u32.copy_from_slice(&layer_data[1][offset..offset + 4]);
+            // let base_block_number = inode.i_block[13];
+            loop {
+                let block_number = inode.i_block[13] as usize;
+                let offset = ((i - self.threshold(1)) / layer_size) << 2;
+                let layer_slice = &mut layer_data[0][offset..offset + 4];
+                buf_u32.copy_from_slice(layer_slice);
                 let block = u32::from_be_bytes(buf_u32.clone()) as usize;
-                let r = f(block, j)?;
-                if !r.0 { return Ok(()); }
+
+                let block_number2 = block;
+                let offset2 = ((i - 12) % layer_size) << 2;
+                let layer_slice2 = &mut layer_data[1][offset2..offset2 + 4];
+                buf_u32.copy_from_slice(layer_slice2);
+                let block2 = u32::from_be_bytes(buf_u32.clone()) as usize;
+                debug!("ldata[0][{}..+4] = {}, ldata[1][{}..+4] = {}", offset, block, offset2, block2);
+
+                if layer_index[1] != block_number2 && block_number2 != 0 {
+                    debug!("L2.1: saving layer index data at block {}", layer_index[1]);
+                    dump_index_table!(1);
+                    debug!("L2.1: getting layer index data for new block {}", block_number2);
+                    self.read_data_block(block_number2, &mut layer_data[1])?;
+                    layer_index[1] = block_number2;
+                }
+
+                if layer_index[0] != block_number && block_number != 0 {
+                    debug!("L2.0: saving layer index data at block {}", layer_index[0]);
+                    dump_index_table!(0);
+                    debug!("L2.0: getting layer index data for new block {}", block_number);
+                    self.read_data_block(block_number, &mut layer_data[0])?;
+                    layer_index[0] = block_number;
+                }
+
+                let r = f(block2, i)?;
+                if r.1 {
+                    // let mut new_layer_block = 0 as usize;
+                    // let block_base = inode.i_block[13];
+                    // let new_block = self.allocate_block()? as u32;
+                    // layer_slice2.copy_from_slice(&new_block.to_be_bytes());
+                    // layer_modified[1] = true;
+                    // if offset2 + 4 == self.block_size() || block == 0 {
+                    //     let new_block = self.allocate_block()? as u32;
+                    //     debug!("full, allocate on layer 1, new block: {}, offset: {}", new_block, offset);
+                    //     let layer_index_data = self.create_block_vec();
+                    //     self.write_data_block(new_block as usize, &layer_index_data)?;
+                    //     // layer_slice.copy_from_slice(&new_block.to_be_bytes());
+                    //     layer_data[0][offset..offset + 4].copy_from_slice(&new_block.to_be_bytes());
+                    //     layer_modified[0] = true;
+                    // }
+                    // if block_base == 0 {
+                    //     layer_modified[0] = true;
+                    //     layer_index[0] = new_layer_block as usize;
+                    //     dump_index_table!(0);
+                    // }
+                    if block == 0 {
+                        let new_block = self.allocate_block()? as u32;
+                        debug!("full, allocate on layer 1, new block: {}, offset: {}", new_block, offset);
+                        let layer_index_data = self.create_block_vec();
+                        self.write_data_block(new_block as usize, &layer_index_data)?;
+                        // layer_slice.copy_from_slice(&new_block.to_be_bytes());
+                        layer_data[0][offset..offset + 4].copy_from_slice(&new_block.to_be_bytes());
+                        layer_modified[0] = true;
+                    }
+                    let new_block = self.allocate_block()? as u32;
+                    layer_data[1][offset2..offset2 + 4].copy_from_slice(&new_block.to_be_bytes());
+                    layer_modified[1] = true;
+                } else {
+                    if !r.0 {
+                        save_inode_and_exit!(layer_modified[0]);
+                        save_inode_and_exit!(layer_modified[1]);
+                    }
+                    break;
+                }
             }
         }
         dump_index_table!(0);
@@ -1292,6 +1353,7 @@ impl<T: DiskDriver> RFS<T> {
         let disk_size = self.disk_size();
         let mut last_index = 0 as usize;
         let mut last_block = 0 as usize;
+        let mut last_zero_index = usize::MAX;
         assert_eq!(0, offset % sz);
         // rep!(reply, self.walk_blocks_inode(ino, start_index, &mut |block, index| {
         self.visit_blocks_inode(ino, start_index, &mut |block, index| {
@@ -1300,6 +1362,10 @@ impl<T: DiskDriver> RFS<T> {
                 block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, size);
             if block == 0 {
                 debug!("zero block!");
+                if last_zero_index == index {
+                    panic!("error zero index");
+                }
+                last_zero_index = index;
                 return Ok((will_continue, index * sz - offset < size));
             }
             blocks.push(block);
