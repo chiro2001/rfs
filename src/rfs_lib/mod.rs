@@ -650,6 +650,7 @@ impl<T: DiskDriver> RFS<T> {
 
     pub fn make_node(&mut self, parent: usize, name: &str,
                      mode: usize, node_type: Ext2FileType) -> Result<(usize, Ext2INode)> {
+        debug!("make_node(parent={}, name={})", parent, name);
         let file_type: usize = node_type.clone().into();
         let mut inode_parent = self.get_inode(parent as usize)?;
         // search inode bitmap for free inode
@@ -691,7 +692,9 @@ impl<T: DiskDriver> RFS<T> {
             inode.i_block[0] = data_block_free as u32;
             debug!("data block now: {:?}", inode.i_block[0]);
             let mut dir_this = entry.clone();
+            debug!("dir_this: {}", dir_this.to_string());
             dir_this.update_name(".");
+            debug!("dir_this updated: {}", dir_this.to_string());
             entries.push(dir_this);
             let dir_parent = Ext2DirEntry::new_dir("..", parent);
             entries.push(dir_parent);
@@ -836,6 +839,7 @@ impl<T: DiskDriver> RFS<T> {
             }
             Ext2FileType::RegularFile => {
                 debug!("is regular file, first data at block {}", data_block_free);
+                inode.i_block[0] = data_block_free as u32;
             }
             _ => {}
         };

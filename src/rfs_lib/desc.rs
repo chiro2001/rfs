@@ -10,6 +10,7 @@ use std::mem::size_of;
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime, NaiveDateTime, Utc};
 use fuse::{FileAttr, FileType};
+use log::debug;
 use rand::Rng;
 use crate::prv;
 use crate::rfs_lib::types::{le16, le32, s16};
@@ -1047,8 +1048,15 @@ impl Ext2DirEntry {
         format!("{} {} entry size {} name size {}", self.inode,
                 self.get_name(), self.rec_len, self.name_len)
     }
+    fn name_len(&self) -> usize {
+        for (i, v) in self.name.iter().enumerate() {
+            if *v == 0 { return i }
+        };
+        return self.name.len();
+    }
     pub fn update_rec_len(&mut self) {
-        self.rec_len = up_align(4 + 2 + 1 + 1 + self.name.len(), 2) as u16;
+        self.rec_len = up_align(4 + 2 + 1 + 1 + self.name_len(), 2) as u16;
+        debug!("update_rec_len: {}", self.rec_len);
     }
     pub fn update_name(&mut self, name: &str) {
         let name_bytes = name.as_bytes();
