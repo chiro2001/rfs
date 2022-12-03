@@ -679,6 +679,7 @@ impl<T: DiskDriver> RFS<T> {
         for (i, d) in inode_parent.i_block.iter().enumerate() {
             if *d != 0 { last_block_i = i; }
         }
+        let mut init_directory_done = false;
         let block_size = self.block_size();
         let init_directory = |entry: &mut Ext2DirEntry, inode: &Ext2INode, data_block_free: usize|
                               -> Result<(Vec<u8>, Ext2INode)> {
@@ -692,10 +693,14 @@ impl<T: DiskDriver> RFS<T> {
             inode.i_block[0] = data_block_free as u32;
             debug!("data block now: {:?}", inode.i_block[0]);
             let mut dir_this = entry.clone();
-            debug!("dir_this: {}", dir_this.to_string());
-            dir_this.update_name(".");
-            debug!("dir_this updated: {}", dir_this.to_string());
-            entries.push(dir_this);
+            if dir_this.name[0] == u8::try_from('.')? && dir_this.name_len == 1 {
+                debug!("this_dir is '.', ignore inserting another '.'");
+            } else {
+                debug!("dir_this: {}", dir_this.to_string());
+                dir_this.update_name(".");
+                debug!("dir_this updated: {}", dir_this.to_string());
+                entries.push(dir_this);
+            }
             let dir_parent = Ext2DirEntry::new_dir("..", parent);
             entries.push(dir_parent);
             let lens = entries.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
@@ -741,6 +746,7 @@ impl<T: DiskDriver> RFS<T> {
                     inode_parent.i_mode = (mode | (file_type << 12)) as u16;
                 }
                 let dir_entry_block_data = init_directory(&mut entry, &inode_parent, parent_data_block_free)?;
+                init_directory_done = true;
                 inode_parent = dir_entry_block_data.1;
                 debug!("after update, inode parent: {:?}", inode_parent);
                 self.write_data_block(parent_data_block_free, &dir_entry_block_data.0)?;
@@ -831,11 +837,15 @@ impl<T: DiskDriver> RFS<T> {
         match node_type {
             Ext2FileType::Directory => {
                 debug!("is directory, creating directory entries at block {}", data_block_free);
-                debug!("set self size to one block...");
-                let dir_entry_block_data = init_directory(&mut entry, &inode, data_block_free)?;
-                inode = dir_entry_block_data.1;
-                debug!("after update, inode: {:?}; ready to write block: {}", inode, data_block_free);
-                self.write_data_block(data_block_free, &dir_entry_block_data.0)?;
+                if init_directory_done {
+                    debug!("has init done, ignore creating directory entries")
+                } else {
+                    debug!("set self size to one block...");
+                    let dir_entry_block_data = init_directory(&mut entry, &inode, data_block_free)?;
+                    inode = dir_entry_block_data.1;
+                    debug!("after update, inode: {:?}; ready to write block: {}", inode, data_block_free);
+                    self.write_data_block(data_block_free, &dir_entry_block_data.0)?;
+                }
             }
             Ext2FileType::RegularFile => {
                 debug!("is regular file, first data at block {}", data_block_free);
@@ -843,7 +853,6 @@ impl<T: DiskDriver> RFS<T> {
             }
             _ => {}
         };
-
 
         debug!("write new inode: [{}] {:?}", ino_free, inode);
         self.set_inode(ino_free, &inode)?;
