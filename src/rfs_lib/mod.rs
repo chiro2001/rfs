@@ -514,7 +514,8 @@ impl<T: DiskDriver> RFS<T> {
         let mut buf_u32 = [0 as u8; 4];
         macro_rules! dump_index_table {
             ($l:expr) => {
-                if layer_modified[$l] {
+                self.set_inode(ino, &inode)?;
+                if layer_modified[$l] && layer_index[$l] != 0 && layer_index[$l] != usize::MAX {
                     self.write_data_block(layer_index[$l], &layer_data[$l])?;
                     layer_modified[$l] = false;
                 }
@@ -522,19 +523,33 @@ impl<T: DiskDriver> RFS<T> {
         }
         // 12 -> L1
         for i in max(block_index, self.threshold(0))..self.threshold(1) {
-            let block_number = inode.i_block[12] as usize;
-            if layer_index[0] != block_number {
-                dump_index_table!(0);
-                self.read_data_block(block_number, &mut layer_data[0])?;
-                layer_index[0] = block_number;
-            }
-            let offset = (i - self.threshold(0)) << 2;
             loop {
+                let block_number = inode.i_block[12] as usize;
+                if layer_index[0] != block_number && block_number != 0 {
+                    debug!("saving layer index data at block {}", layer_index[0]);
+                    dump_index_table!(0);
+                    debug!("getting layer index data for new block {}", block_number);
+                    if layer_index[0] != usize::MAX {
+                        self.read_data_block(block_number, &mut layer_data[0])?;
+                    }
+                    layer_index[0] = block_number;
+                }
+                let offset = (i - self.threshold(0)) << 2;
+
                 let layer_slice = &mut layer_data[0][offset..offset + 4];
                 buf_u32.copy_from_slice(layer_slice);
                 let block = u32::from_be_bytes(buf_u32.clone()) as usize;
                 let r = f(block, i)?;
                 if r.1 {
+                    if block_number == 0 {
+                        // alloc block for layer index data
+                        let new_block = self.allocate_block()?;
+                        inode.i_block[12] = new_block as u32;
+                        debug!("new_block for layer index block: {}", new_block);
+                        // clear data
+                        let layer_index_data = self.create_block_vec();
+                        self.write_data_block(new_block, &layer_index_data)?;
+                    }
                     let new_block = self.allocate_block()? as u32;
                     layer_slice.copy_from_slice(&new_block.to_be_bytes());
                     layer_modified[0] = false;
@@ -1213,6 +1228,12 @@ impl<T: DiskDriver> RFS<T> {
         let start_index = offset / self.block_size();
         assert_eq!(offset % self.block_size(), 0);
 
+        {
+            let inode = self.get_inode(ino)?;
+            debug!("read inode blocks: {:?} ++ {} ++ {} ++ {}",
+            &inode.i_block[..12], inode.i_block[12], inode.i_block[13], inode.i_block[14]);
+        }
+
         let disk_size = self.disk_size();
         let mut last_index = 0 as usize;
         let mut last_block = 0 as usize;
@@ -1240,6 +1261,7 @@ impl<T: DiskDriver> RFS<T> {
             last_block = block;
             Ok((will_continue, false))
         })?;
+        debug!("reading blocks: {:?}", blocks);
         let mut data: Vec<u8> = [0 as u8].repeat(size);
         for (i, block) in blocks.iter().enumerate() {
             // if i * sz >= size { break; }
@@ -1290,6 +1312,7 @@ impl<T: DiskDriver> RFS<T> {
             last_block = block;
             Ok((will_continue, false))
         })?;
+        debug!("writing blocks: {:?}", blocks);
         for (i, block) in blocks.iter().enumerate() {
             // if i * sz >= size { break; }
             let right = min((i + 1) * sz, size);
