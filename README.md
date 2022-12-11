@@ -6,6 +6,8 @@ Based on [fuse-rs](https://github.com/chiro2001/fuse-rs), implement an EXT2 file
 
 *NOT COMPLETED YET.*
 
+[Documents/实验报告](docs/README.md)
+
 ## Usage
 
 ```shell
