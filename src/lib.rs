@@ -13,6 +13,7 @@ lazy_static! {
     pub static ref FORCE_FORMAT: MutStatic<bool> = MutStatic::new();
     pub static ref MKFS_FORMAT: MutStatic<bool> = MutStatic::new();
     pub static ref LAYOUT_FILE: MutStatic<String> = MutStatic::new();
+    pub static ref ENABLE_CACHING: MutStatic<bool> = MutStatic::new();
 }
 
 #[cxx::bridge]

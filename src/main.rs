@@ -12,7 +12,7 @@ use nix::sys::signal;
 use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
 use log::*;
-use rfs::{DEVICE_FILE, FORCE_FORMAT, LAYOUT_FILE, MKFS_FORMAT, MOUNT_POINT, RFS};
+use rfs::{DEVICE_FILE, ENABLE_CACHING, FORCE_FORMAT, LAYOUT_FILE, MKFS_FORMAT, MOUNT_POINT, RFS};
 use crate::rfs_lib::utils::init_logs;
 
 mod rfs_lib;
@@ -26,6 +26,8 @@ fn main() -> Result<()> {
         .arg(arg!(-f --front "Keep daemon running in front").action(ArgAction::SetTrue)
             .required(false))
         .arg(arg!(--format "Format disk").action(ArgAction::SetTrue)
+            .required(false))
+        .arg(arg!(-c --cache "Enable caching").action(ArgAction::SetTrue)
             .required(false))
         .arg(arg!(--mkfs "Use mkfs.ext2 to format disk").action(ArgAction::SetTrue)
             .required(false))
@@ -64,6 +66,7 @@ fn main() -> Result<()> {
     FORCE_FORMAT.set(matches.get_flag("format")).unwrap();
     MKFS_FORMAT.set(matches.get_flag("mkfs")).unwrap();
     // MKFS_FORMAT.set(true).unwrap();
+    ENABLE_CACHING.set(matches.get_flag("cache")).unwrap();
 
     macro_rules! umount {
         () => {
