@@ -573,7 +573,7 @@ impl<T: DiskDriver> RFS<T> {
         }
         dump_index_table!(0);
         // 13 -> L2
-        warn!("L2!");
+        // warn!("L2!");
         for i in max(block_index, self.threshold(1))..self.threshold(2) {
             let base_block_number = inode.i_block[13];
             if base_block_number == 0 {
