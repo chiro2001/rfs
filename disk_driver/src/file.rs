@@ -29,6 +29,9 @@ impl FileDiskDriver {
 
 impl DiskDriver for FileDiskDriver {
     fn ddriver_open(&mut self, path: &str) -> Result<()> {
+        if self.file.is_some() {
+            self.ddriver_close()?;
+        }
         info!("FileDrv open: {}", path);
         if !Path::new(path).exists() {
             info!("Create a new file {}", path);
@@ -124,7 +127,7 @@ impl DiskDriver for FileDiskDriver {
 
 impl FileDiskDriver {
     pub fn new(path: &str, layout_size: u32, iounit_size: u32) -> Self {
-        Self {
+        let mut r = Self {
             info: DiskInfo {
                 stats: Default::default(),
                 consts: DiskConst {
@@ -133,8 +136,13 @@ impl FileDiskDriver {
                     ..Default::default()
                 },
             },
-            file: if path.is_empty() { None } else { Some(File::open(path).unwrap()) },
+            // file: if path.is_empty() { None } else { Some(File::open(path).unwrap()) },
+            file: None,
+        };
+        if !path.is_empty() {
+            r.ddriver_open(path).unwrap();
         }
+        r
     }
 }
 
