@@ -807,11 +807,18 @@ impl<T: DiskDriver> RFS<T> {
         Ok(())
     }
 
-    pub fn make_node2(&mut self, parent: usize, name: &str,
-                      mode: usize, node_type: Ext2FileType) -> Result<(usize, Ext2INode)> {
-        debug!("make_node2(parent={}, name={})", parent, name);
+    pub fn make_node(&mut self, parent: usize, name: &str,
+                     mode: usize, node_type: Ext2FileType) -> Result<(usize, Ext2INode)> {
+        debug!("make_node(parent={}, name={})", parent, name);
         let file_type: usize = node_type.clone().into();
         let ino_free = if parent == 1 { EXT2_ROOT_INO } else { self.allocate_inode()? };
+        if parent == 1 {
+            debug!("allocate bit for root ino");
+            Self::bitmap_set(&mut self.bitmap_inode, EXT2_ROOT_INO);
+            let bitmap_clone: Vec<u8> = self.bitmap_inode.clone();
+            let bitmap_block = self.get_group_desc().bg_inode_bitmap as usize;
+            self.write_data_block(bitmap_block, &bitmap_clone)?;
+        }
         let mut entry = Ext2DirEntry::new(name, ino_free, file_type as u8);
         entry.inode = ino_free as u32;
 
@@ -846,215 +853,6 @@ impl<T: DiskDriver> RFS<T> {
         }
         self.set_inode(ino_free, &inode)?;
 
-        Ok((ino_free, inode))
-    }
-
-    pub fn make_node(&mut self, parent: usize, name: &str,
-                     mode: usize, node_type: Ext2FileType) -> Result<(usize, Ext2INode)> {
-        debug!("make_node(parent={}, name={})", parent, name);
-        let file_type: usize = node_type.clone().into();
-        let mut inode_parent = self.get_inode(parent as usize)?;
-        // search inode bitmap for free inode
-        let ino_free = self.allocate_inode()?;
-
-        // create entry and inode
-        let mut entry = Ext2DirEntry::new(name, ino_free, file_type as u8);
-        let mut inode = Ext2INode::default();
-        entry.inode = ino_free as u32;
-        debug!("entry use new ino {}", ino_free);
-
-        let mut data_block_free = 0 as usize;
-        match node_type {
-            Ext2FileType::Directory | Ext2FileType::RegularFile => {
-                debug!("finding new data block...");
-                let block_free = self.allocate_block()?;
-                data_block_free = block_free;
-                debug!("found free block: {}", data_block_free);
-            }
-            _ => {}
-        };
-
-        inode.i_mode = (mode & 0xFFF) as u16 | (file_type << 12) as u16;
-        // append to parent dir entry
-        let mut last_block_i = usize::MAX;
-        for (i, d) in inode_parent.i_block.iter().enumerate() {
-            if *d != 0 { last_block_i = i; }
-        }
-        let mut init_directory_done = false;
-        let block_size = self.block_size();
-        let init_directory = |entry: &mut Ext2DirEntry, inode: &Ext2INode, data_block_free: usize|
-                              -> Result<(Vec<u8>, Ext2INode)> {
-            debug!("init_directory for ino {}", ino_free);
-            let mut inode = inode.clone();
-            inode.i_blocks = 1;
-            inode.i_size = block_size as u32;
-            debug!("inode.i_blocks = {}, inode.i_size = {}", inode.i_blocks, inode.i_size);
-            let mut entries = vec![];
-            debug!("set first data block...");
-            inode.i_block[0] = data_block_free as u32;
-            debug!("data block now: {:?}", inode.i_block[0]);
-            let mut dir_this = entry.clone();
-            if dir_this.name[0] == u8::try_from('.')? && dir_this.name_len == 1 {
-                debug!("this_dir is '.', ignore inserting another '.'");
-            } else {
-                debug!("dir_this: {}", dir_this.to_string());
-                dir_this.update_name(".");
-                debug!("dir_this updated: {}", dir_this.to_string());
-                entries.push(dir_this);
-            }
-            let dir_parent = Ext2DirEntry::new_dir("..", parent);
-            entries.push(dir_parent);
-            let lens = entries.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
-            let mut offset = 0;
-            for l in &lens {
-                offset += l;
-            }
-            // pad rec_len
-            let mut entry_last = entries.last().unwrap().clone();
-            offset -= entry_last.rec_len as usize;
-            let entry_last_real_len = entry_last.rec_len;
-            entry_last.rec_len = (block_size - offset) as u16;
-            let entries_len = entries.len();
-            entries[entries_len - 1] = entry_last;
-            // let mut block_data = self.create_block_vec();
-            let mut block_data = [0 as u8].repeat(block_size);
-            offset = 0;
-            for (i, entry) in entries.iter().enumerate() {
-                debug!("write directory entry {}", entry.to_string());
-                if i != entries_len - 1 {
-                    debug!("write offset [{}..{}]", offset, offset + entry.rec_len as usize);
-                    block_data[offset..offset + entry.rec_len as usize]
-                        .copy_from_slice(&unsafe { serialize_row(entry) }[..entry.rec_len as usize]);
-                    offset += entry.rec_len as usize;
-                } else {
-                    debug!("write offset [{}..{}]", offset, offset + entry_last_real_len as usize);
-                    block_data[offset..offset + entry_last_real_len as usize]
-                        .copy_from_slice(&unsafe { serialize_row(entry) }[..entry_last_real_len as usize]);
-                }
-            }
-            // self.write_data_block(data_block_free, &block_data)
-            Ok((block_data, inode))
-        };
-        if last_block_i == usize::MAX {
-            if node_type == Ext2FileType::Directory {
-                debug!("parent inode data block is empty, creating a block for this directory");
-                let parent_data_block_free = self.allocate_block()?;
-                if inode_parent.i_blocks == 0 && inode_parent.i_size == 0 && inode_parent.i_mode == 0 {
-                    debug!("inode_parent is empty, use default value");
-                    inode_parent = Ext2INode::default();
-                    inode_parent.i_size = block_size as u32;
-                    inode_parent.i_blocks = 1;
-                    inode_parent.i_mode = (mode | (file_type << 12)) as u16;
-                }
-                let dir_entry_block_data = init_directory(&mut entry, &inode_parent, parent_data_block_free)?;
-                init_directory_done = true;
-                inode_parent = dir_entry_block_data.1;
-                debug!("after update, inode parent: {:?}", inode_parent);
-                self.write_data_block(parent_data_block_free, &dir_entry_block_data.0)?;
-                last_block_i = 0;
-            } else {
-                panic!("data block is empty");
-            }
-        }
-        // TODO layer 1-3 support
-        assert!(!(last_block_i == 12 || last_block_i == 13 || last_block_i == 14));
-        // read parent dir
-        let mut parent_entries = self.get_block_dir_entries(inode_parent.i_block[last_block_i] as usize)?;
-        let mut entries_lengths: Vec<usize> = parent_entries.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
-        let mut offset_cnt = 0 as usize;
-        let mut reset_last_rec_len = false;
-        for (i, len) in entries_lengths.iter().enumerate() {
-            if i != entries_lengths.len() - 1 {
-                offset_cnt += len;
-            } else {
-                // last entry may have a large rec_len
-                // calculate real size
-                if *len as i64 - (8 + parent_entries[i].name_len) as i64 >= entry.rec_len as i64 {
-                    reset_last_rec_len = true;
-                    offset_cnt += parent_entries[i].name_len as usize + 8;
-                } else {
-                    offset_cnt += len;
-                }
-            }
-        }
-        prv!(entries_lengths, offset_cnt);
-        if offset_cnt + entry.rec_len as usize >= self.block_size() {
-            debug!("offset overflow! old last_block_i: {}, block: {}", last_block_i, inode_parent.i_block[last_block_i]);
-            // append block index and load next block
-            assert_ne!(last_block_i, 11);
-            last_block_i += 1;
-            let block_free = self.allocate_block()?;
-            inode_parent.i_block[last_block_i] = block_free as u32;
-            // reload parent_dir
-            let parent_entries_2 = self.get_block_dir_entries(block_free)?;
-            parent_entries = parent_entries_2;
-            entries_lengths = parent_entries.iter().map(|e| e.rec_len as usize).collect();
-            offset_cnt = 0;
-            reset_last_rec_len = false;
-            for len in entries_lengths { offset_cnt += len; }
-        }
-        debug!("parent inode blocks: {:x?}", inode_parent.i_block);
-        debug!("write entry to buf, rec_len = {}", entry.rec_len);
-        let mut data_block = self.create_block_vec();
-        self.read_data_block(inode_parent.i_block[last_block_i] as usize, &mut data_block)?;
-        // debug!("original data_block:");
-        // show_hex_debug(&data_block[..0x50], 0x10);
-        if reset_last_rec_len {
-            debug!("write back modified parent entries");
-            let parent_entries_tail = parent_entries.len() - 1;
-            let mut parent_entries_last = parent_entries[parent_entries_tail].clone();
-            debug!("parent_entries_last: {}", parent_entries_last.to_string());
-            let parent_entries_last_rec_len_old = parent_entries_last.rec_len as usize;
-            let offset_start = self.block_size() - parent_entries_last_rec_len_old;
-            parent_entries_last.rec_len = (up_align((parent_entries_last.name_len + 8) as usize, 4)) as u16;
-            debug!("parent_entries_last updated: {}", parent_entries_last.to_string());
-            let parent_entries_last_data = unsafe { serialize_row(&parent_entries_last) };
-            let offset_next = offset_start + parent_entries_last.rec_len as usize;
-            debug!("data_block update: [{:x}..{:x}]", offset_start, offset_next);
-            data_block[offset_start..offset_next]
-                .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
-            // debug!("data_block after update:");
-            // show_hex_debug(&data_block[..0x50], 0x10);
-            offset_cnt = offset_next;
-        }
-        let old_rec_len = entry.rec_len;
-        let offset_next = offset_cnt + old_rec_len as usize;
-        entry.rec_len = (self.block_size() - offset_cnt) as u16;
-        debug!("new entry to write: {}", entry.to_string());
-        let entry_data = unsafe { serialize_row(&entry) };
-        debug!("update data_block for entry_data: [{:x}..{:x}]", offset_cnt, offset_next);
-        data_block[offset_cnt..offset_next].copy_from_slice(&entry_data[..old_rec_len as usize]);
-        // debug!("data_block to write:");
-        // show_hex_debug(&data_block[..0x50], 0x10);
-        debug!("write back buf block: {}", inode_parent.i_block[last_block_i]);
-        self.write_data_block(inode_parent.i_block[last_block_i] as usize, &data_block)?;
-        let attr = inode.to_attr(ino_free, self.block_size());
-        debug!("file {} == {} created! attr: {:?}", name, entry.get_name(), attr);
-
-        match node_type {
-            Ext2FileType::Directory => {
-                debug!("is directory, creating directory entries at block {}", data_block_free);
-                if init_directory_done {
-                    debug!("has init done, ignore creating directory entries")
-                } else {
-                    debug!("set self size to one block...");
-                    let dir_entry_block_data = init_directory(&mut entry, &inode, data_block_free)?;
-                    inode = dir_entry_block_data.1;
-                    debug!("after update, inode: {:?}; ready to write block: {}", inode, data_block_free);
-                    self.write_data_block(data_block_free, &dir_entry_block_data.0)?;
-                }
-            }
-            Ext2FileType::RegularFile => {
-                debug!("is regular file, first data at block {}", data_block_free);
-                inode.i_block[0] = data_block_free as u32;
-            }
-            _ => {}
-        };
-
-        debug!("write new inode: [{}] {:?}", ino_free, inode);
-        self.set_inode(ino_free, &inode)?;
-        debug!("write parent inode: [{}] {:?}", parent, inode_parent);
-        self.set_inode(parent as usize, &inode_parent)?;
         Ok((ino_free, inode))
     }
 
@@ -1289,8 +1087,9 @@ impl<T: DiskDriver> RFS<T> {
                         // self.write_data_block(inode_block_number, &bitmap_data_clone)?;
 
                         // self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
-                        self.make_node2(1, ".", 0o755, Ext2FileType::Directory)?;
+                        self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
                         // self.make_node(EXT2_ROOT_INO, "lost+found", 0o755, Ext2FileType::Directory)?;
+                        self.rfs_dump()?;
                         self.get_driver().ddriver_flush()?;
                     }
                 }
