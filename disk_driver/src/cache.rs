@@ -20,14 +20,16 @@ struct CacheItem {
 /// ```rust
 /// use lru::LruCache;
 /// use std::num::NonZeroUsize;
-/// let mut cache = LruCache::<u64, Vec<u8>>::new(NonZeroUsize::new(2).unwrap());
-/// let tag = 0x114514 as u64;
-/// let raw_data = vec![0x55 as u8; 2];
-/// cache.push(tag, raw_data.clone());
-/// cache.push(tag + 1, raw_data.clone());
-/// cache.push(tag + 2, raw_data.clone());
+/// let mut cache = LruCache::<usize, usize>::new(NonZeroUsize::new(2).unwrap());
+/// let tag = 0x114514 as usize;
+/// let raw_data = 0xa as usize;
+/// cache.push(tag, raw_data);
+/// cache.push(tag + 1, raw_data + 1);
+/// // cache.push(tag + 2, raw_data + 2);
+/// let data = cache.get_mut(&tag).unwrap();
+/// *data = 0xb;
 /// let data = cache.get(&tag).unwrap();
-/// assert_eq!(data, &raw_data);
+/// assert_eq!(*data, 0xb);
 /// ```
 pub struct CacheDiskDriver<T: DiskDriver> {
     inner: T,
