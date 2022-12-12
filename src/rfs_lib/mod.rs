@@ -1162,6 +1162,7 @@ impl<T: DiskDriver> RFS<T> {
 
                         self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
                         // self.make_node(EXT2_ROOT_INO, "lost+found", 0o755, Ext2FileType::Directory)?;
+                        self.get_driver().ddriver_flush()?;
                     }
                 }
             }

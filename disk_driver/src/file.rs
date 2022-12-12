@@ -107,7 +107,6 @@ impl DiskDriver for FileDiskDriver {
 
     fn ddriver_reset(&mut self) -> Result<()> {
         self.ddriver_write(&[0].repeat(self.info.consts.layout_size as usize), self.info.consts.layout_size.try_into().unwrap())?;
-        // TODO: write superblock to erase all filesystem
         self.info = DiskInfo::default();
         Ok(())
     }
