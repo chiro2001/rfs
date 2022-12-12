@@ -1148,6 +1148,11 @@ impl<T: DiskDriver> RFS<T> {
                         // create root directory
                         // self.make_node(1, "..", 0o755, Ext2FileType::Directory)?;
                         // self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
+                        debug!("setting inode bit for root directory");
+                        RFS::<T>::bitmap_set(&mut self.bitmap_inode, EXT2_ROOT_INO);
+                        let inode_block_number = self.get_group_desc().bg_inode_bitmap as usize;
+                        let bitmap_data_clone = self.bitmap_inode.clone();
+                        self.write_data_block(inode_block_number, &bitmap_data_clone)?;
                         self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
                         // self.make_node(EXT2_ROOT_INO, "lost+found", 0o755, Ext2FileType::Directory)?;
                     }
