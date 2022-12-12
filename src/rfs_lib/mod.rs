@@ -345,8 +345,20 @@ impl<T: DiskDriver> RFS<T> {
         //     Ok(index * sz < size)
         // }));
 
-        // TODO: layer 1-3 directory entries supporting
-        Ok(inode.i_block.iter().take(12)
+        let mut blocks = vec![];
+        blocks.extend_from_slice(&inode.i_block);
+        self.visit_blocks_inode(ino, 0, &mut |block, index| {
+            debug!("dir walk to block {} index {}", block, index);
+            if block != 0 {
+                Ok((false, false))
+            } else {
+                blocks.push(block as u32);
+                Ok((true, false))
+            }
+        })?;
+
+        // layer 1-3 directory entries supporting
+        Ok(blocks.iter().take(12)
             .map(|b| match self.get_block_dir_entries(*b as usize) {
                 Ok(e) => e,
                 Err(_) => vec![]
