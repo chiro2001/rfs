@@ -1431,6 +1431,8 @@ impl<T: DiskDriver> RFS<T> {
         let data_block_number = self.get_group_desc().bg_block_bitmap as usize;
         let bitmap_data_clone = self.bitmap_data.clone();
         self.write_data_block(data_block_number, &bitmap_data_clone)?;
+        debug!("flush disk");
+        self.driver.ddriver_flush()?;
         Ok(())
     }
 }
