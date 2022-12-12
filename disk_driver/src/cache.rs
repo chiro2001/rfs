@@ -43,4 +43,9 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
     fn ddriver_flush(&mut self) -> Result<()> {
         self.inner.ddriver_flush()
     }
+
+    fn ddriver_flush_range(&mut self, left: u64, right: u64) -> Result<()> {
+        // self.inner.ddriver_flush_range(left, right)
+        Ok(())
+    }
 }

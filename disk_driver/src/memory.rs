@@ -77,6 +77,10 @@ impl DiskDriver for MemoryDiskDriver {
     }
 
     fn ddriver_flush(&mut self) -> Result<()> { Ok(()) }
+
+    fn ddriver_flush_range(&mut self, _left: u64, _right: u64) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl MemoryDiskDriver {

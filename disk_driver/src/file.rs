@@ -113,8 +113,12 @@ impl DiskDriver for FileDiskDriver {
     }
 
     fn ddriver_flush(&mut self) -> Result<()> {
-        self.get_file().flush();
+        self.get_file().flush()?;
         Ok(())
+    }
+
+    fn ddriver_flush_range(&mut self, _left: u64, _right: u64) -> Result<()> {
+        self.ddriver_flush()
     }
 }
 

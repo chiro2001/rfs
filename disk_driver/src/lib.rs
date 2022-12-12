@@ -80,6 +80,8 @@ pub trait DiskDriver {
     fn ddriver_reset(&mut self) -> Result<()>;
     /// Flush all
     fn ddriver_flush(&mut self) -> Result<()>;
+    /// Flush range
+    fn ddriver_flush_range(&mut self, left: u64, right: u64) -> Result<()>;
 }
 
 pub const IOC_REQ_DEVICE_SIZE: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('A' as u32) << (0 + 8)) | ((0) << 0) | ((size_of::<u32>() as u32) << ((0 + 8) + 8));
