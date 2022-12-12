@@ -58,6 +58,15 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
         debug!("mknod done");
     }
 
+    fn mkdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, umask: u32, reply: ReplyEntry) {
+        prv!("mkdir", parent, name, mode);
+        rep!(reply, inode_info, self.make_node(parent as usize, name.to_str().unwrap(), mode as usize, Ext2FileType::Directory));
+        let (ino, inode) = inode_info;
+        let attr = inode.to_attr(ino, self.block_size());
+        reply.entry(&TTL, &attr, 0);
+        debug!("mkdir done");
+    }
+
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32,
             _flags: i32, _lock_owner: Option<u64>, reply: ReplyData) {
         prv!("read", ino, offset, size);
