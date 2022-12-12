@@ -24,7 +24,7 @@ pub mod fuse;
 use utils::*;
 use mem::*;
 use desc::*;
-use crate::{DEVICE_FILE, FORCE_FORMAT, LAYOUT_FILE, MKFS_FORMAT, prv};
+use crate::{DEVICE_FILE, ENABLE_CACHING, FORCE_FORMAT, LAYOUT_FILE, MKFS_FORMAT, prv};
 
 /// Data TTL, 1 second default
 const TTL: Duration = Duration::from_secs(1);
@@ -246,6 +246,10 @@ impl<T: DiskDriver> RFS<T> {
         let block_number = ino / inodes_per_block + self.get_group_desc().bg_inode_table as usize;
         // prv!(ino, block_number, offset / EXT2_INODE_SIZE);
         Ok((block_number, offset))
+    }
+
+    fn is_caching() -> bool {
+        ENABLE_CACHING.read().unwrap().clone()
     }
 
     /// Read inode struct according to ino number
@@ -935,9 +939,11 @@ impl<T: DiskDriver> RFS<T> {
             reserved_blocks
         } else { self.super_block.s_first_ino as usize + 1 })?;
         Self::bitmap_set(bitmap, block_free);
-        // save bitmap
-        let bitmap_clone: Vec<u8> = bitmap.clone();
-        self.write_data_block(bitmap_block, &bitmap_clone)?;
+        if !RFS::<T>::is_caching() {
+            // save bitmap
+            let bitmap_clone: Vec<u8> = bitmap.clone();
+            self.write_data_block(bitmap_block, &bitmap_clone)?;
+        }
         Ok(block_free)
     }
 
@@ -949,6 +955,25 @@ impl<T: DiskDriver> RFS<T> {
     pub fn allocate_inode(&mut self) -> Result<usize> {
         let block = self.get_group_desc().bg_inode_bitmap as usize;
         self.allocate_bitmap(block, false)
+    }
+
+    fn read_super_block(&mut self) -> Result<Ext2SuperBlock> {
+        // read super block
+        let super_blk_count = size_of::<Ext2SuperBlock>() / self.disk_block_size();
+        let disk_block_size = self.disk_block_size();
+        info!("super block size {} disk block ({} bytes)", super_blk_count, super_blk_count * self.disk_block_size());
+        let mut data_blocks_head = [0 as u8].repeat((disk_block_size * super_blk_count) as usize);
+        self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
+        let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_blocks_head) };
+        if !super_block.magic_matched() {
+            // maybe there is one block reserved for boot,
+            // read one block again
+            self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
+            // data_blocks_head.reverse();
+            super_block = unsafe { deserialize_row(&data_blocks_head) };
+            if super_block.magic_matched() { self.filesystem_first_block = 1; }
+        }
+        Ok(super_block)
     }
 
     pub fn rfs_init(&mut self, file: &str) -> Result<()> {
@@ -971,21 +996,7 @@ impl<T: DiskDriver> RFS<T> {
             return Err(anyhow!("Too small disk! disk size is 0x{:x}", self.disk_size()));
         }
         info!("disk info: {:?}", self.driver_info);
-        // read super block
-        let super_blk_count = size_of::<Ext2SuperBlock>() / self.disk_block_size();
-        let disk_block_size = self.disk_block_size();
-        info!("super block size {} disk block ({} bytes)", super_blk_count, super_blk_count * self.disk_block_size());
-        let mut data_blocks_head = [0 as u8].repeat((disk_block_size * super_blk_count) as usize);
-        self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
-        let mut super_block: Ext2SuperBlock = unsafe { deserialize_row(&data_blocks_head) };
-        if !super_block.magic_matched() {
-            // maybe there is one block reserved for boot,
-            // read one block again
-            self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
-            // data_blocks_head.reverse();
-            super_block = unsafe { deserialize_row(&data_blocks_head) };
-            if super_block.magic_matched() { self.filesystem_first_block = 1; }
-        }
+        let mut super_block = self.read_super_block()?;
         let format = FORCE_FORMAT.read().unwrap().clone();
         if !super_block.magic_matched() || format {
             if !format { warn!("FileSystem not found! creating super block..."); } else { warn!("Will format disk!") }
@@ -1008,13 +1019,7 @@ impl<T: DiskDriver> RFS<T> {
                 info!("{}", String::from_utf8(output.stdout).unwrap());
                 // reload disk driver
                 self.get_driver().ddriver_open(&file)?;
-                self.seek_block(0)?;
-                self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
-                super_block = unsafe { deserialize_row(&data_blocks_head) };
-                if !super_block.magic_matched() {
-                    self.read_disk_blocks(&mut data_blocks_head, super_blk_count)?;
-                    super_block = unsafe { deserialize_row(&data_blocks_head) };
-                }
+                super_block = self.read_super_block()?;
                 if super_block.magic_matched() {
                     self.filesystem_first_block = 1;
                     info!("Disk driver reloaded.");
@@ -1206,6 +1211,7 @@ impl<T: DiskDriver> RFS<T> {
     }
 
     pub fn rfs_destroy(&mut self) -> Result<()> {
+        self.rfs_dump()?;
         self.get_driver().ddriver_close()
     }
 
@@ -1403,5 +1409,28 @@ impl<T: DiskDriver> RFS<T> {
         let entries = self.get_dir_entries(ino)?.into_iter()
             .skip(offset as usize).collect::<Vec<Ext2DirEntry>>();
         Ok(entries)
+    }
+
+    /// Dump all data in memory to disk
+    pub fn rfs_dump(&mut self) -> Result<()> {
+        debug!("dump super block");
+        let mut super_block = self.read_super_block()?;
+        self.super_block.apply_to(&mut super_block);
+        let super_block_data = unsafe { serialize_row(&super_block) };
+        self.write_data_block(self.filesystem_first_block, super_block_data)?;
+        debug!("dump group desc");
+        let mut data_block = self.create_block_vec();
+        assert_eq!(self.group_desc_table.len(), 1);
+        let group_desc_data = unsafe { serialize_row(self.group_desc_table.get(0).unwrap()) };
+        data_block[..group_desc_data.len()].copy_from_slice(group_desc_data);
+        self.write_data_block(self.super_block.s_first_data_block as usize + self.filesystem_first_block, &data_block)?;
+        debug!("dump bitmaps");
+        let inode_block_number = self.get_group_desc().bg_inode_bitmap as usize;
+        let bitmap_data_clone = self.bitmap_inode.clone();
+        self.write_data_block(inode_block_number, &bitmap_data_clone)?;
+        let data_block_number = self.get_group_desc().bg_block_bitmap as usize;
+        let bitmap_data_clone = self.bitmap_data.clone();
+        self.write_data_block(data_block_number, &bitmap_data_clone)?;
+        Ok(())
     }
 }
