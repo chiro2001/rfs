@@ -16,6 +16,49 @@ struct CacheItem {
     data: Vec<u8>,
 }
 
+struct MyLruCache {
+    size: usize,
+}
+
+impl MyLruCache {
+    pub fn new(size: usize) -> Self {
+        Self { size }
+    }
+
+    pub fn push(&mut self, tag: u64, data: CacheItem) -> Option<(u64, CacheItem)> {
+        // None
+        Some((tag, data))
+    }
+
+    pub fn get<'a>(&mut self, tag: &u64) -> Option<&'a CacheItem> {
+        // &vec![0 as u8; 512]
+        None
+    }
+
+    pub fn get_mut<'a>(&mut self, tag: &u64) -> Option<&'a mut CacheItem> {
+        // &mut vec![0 as u8; 512]
+        None
+    }
+
+    pub fn clear(&mut self) {}
+}
+
+impl Iterator for MyLruCache {
+    type Item = (u64, CacheItem);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        None
+    }
+}
+
+impl Iterator for &MyLruCache {
+    type Item = (u64, CacheItem);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        None
+    }
+}
+
 /// Test LRU:
 /// ```rust
 /// use lru::LruCache;
@@ -32,7 +75,8 @@ struct CacheItem {
 pub struct CacheDiskDriver<T: DiskDriver> {
     inner: T,
     info: CacheDiskInfo,
-    cache: LruCache<u64, CacheItem>,
+    // cache: LruCache<u64, CacheItem>,
+    cache: MyLruCache,
     offset: i64,
     block_log: u64,
 }
@@ -68,7 +112,9 @@ impl<T: DiskDriver> CacheDiskDriver<T> {
         inner.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf).unwrap();
         info.size = u32::from_le_bytes(buf.clone());
         let block_log = int_log2(unit as u64);
-        let cache = LruCache::new(NonZeroUsize::new(size).unwrap());
+        assert_eq!(1 << block_log, unit);
+        // let cache = LruCache::new(NonZeroUsize::new(size).unwrap());
+        let cache = MyLruCache::new(size);
         debug!("cache init, cache size: {}, disk size: {:x}, disk unit: {:x}; block_log: {}",
             size, info.size, info.unit, block_log);
         Self { inner, info, cache, offset: 0, block_log }
@@ -77,6 +123,7 @@ impl<T: DiskDriver> CacheDiskDriver<T> {
     /// address = [ TAG | OFFSET ]
     fn get_tag(&self, address: u64) -> u64 {
         address >> self.block_log
+        // address / self.info.unit as u64
     }
 
     fn get_offset_tag(&self) -> u64 {
@@ -88,6 +135,7 @@ impl<T: DiskDriver> CacheDiskDriver<T> {
             Some((tag, item)) => {
                 if item.dirty {
                     let address = tag << self.block_log;
+                    // let address = tag * self.info.unit as u64;
                     debug!("cache write back to {:x}", address);
                     let unit = self.info.unit as usize;
                     self.inner.ddriver_write(&item.data, unit)?;
@@ -101,6 +149,7 @@ impl<T: DiskDriver> CacheDiskDriver<T> {
 
 impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
     fn ddriver_open(&mut self, path: &str) -> Result<()> {
+        self.cache.clear();
         self.inner.ddriver_open(path)
     }
 
@@ -159,11 +208,17 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
                     debug!("write newed:");
                     show_hex_debug(&data[..0x20], 0x10);
                     let replaced = self.cache.push(tag, CacheItem { data, dirty: true });
+                    // if replaced.is_some() && replaced.as_ref().unwrap().0 != tag {
                     self.write_back_item(replaced)?;
+                    // }
                     self.offset += unit as i64;
                     Ok(unit)
                 }
             }
+            // self.inner.ddriver_seek(self.offset, SeekType::Set)?;
+            // let sz = self.inner.ddriver_write(buf, size)?;
+            // self.offset += sz as i64;
+            // Ok(sz)
         }
     }
 
@@ -203,6 +258,10 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
                     Ok(sz)
                 }
             }
+            // self.inner.ddriver_seek(self.offset, SeekType::Set)?;
+            // let sz = self.inner.ddriver_read(buf, size)?;
+            // self.offset += sz as i64;
+            // Ok(sz)
         }
     }
 
@@ -211,8 +270,8 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
     }
 
     fn ddriver_reset(&mut self) -> Result<()> {
-        self.inner.ddriver_reset()?;
         self.ddriver_flush()?;
+        self.inner.ddriver_reset()?;
         Ok(())
     }
 
