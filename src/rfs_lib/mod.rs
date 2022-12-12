@@ -1252,41 +1252,29 @@ impl<T: DiskDriver> RFS<T> {
     pub fn rfs_unlink(&mut self, parent: usize, name: &str) -> Result<()> {
         let parent = RFS::<T>::shift_ino(parent);
         let entries = self.get_dir_entries(parent)?;
-        let mut d = Ext2DirEntry::default();
-        let mut index = 0;
-        let entries_size = entries.len();
-        for (i, e) in entries.into_iter().enumerate() {
-            if e.get_name() == name {
-                d = e;
-                index = i;
-                break;
+        let d = match entries.iter().find(|x| x.get_name() == name) {
+            Some(d) => d.clone(),
+            None => return Err(anyhow!("No such of file {}!", name)),
+        };
+        debug!("get file inode");
+        let inode = self.get_inode(d.inode as usize)?;
+        debug!("unset bitmaps");
+        let mut remove_blocks = vec![];
+        self.visit_blocks_inode(d.inode as usize, 0, &mut |block, index| {
+            debug!("remove walk to block {} index {}", block, index);
+            if block != 0 {
+                remove_blocks.push(block);
             }
+            Ok((block != 0, false))
+        })?;
+        for b in remove_blocks {
+            Self::bitmap_unset(&mut self.bitmap_data, b);
         }
-        if d.inode == 0 {
-            Err(anyhow!("No such file"))
-        } else {
-            debug!("get file inode");
-            let inode = self.get_inode(d.inode as usize)?;
-            debug!("unset bitmaps");
-            let mut remove_blocks = vec![];
-            self.visit_blocks_inode(d.inode as usize, 0, &mut |block, index| {
-                debug!("remove walk to block {} index {}", block, index);
-                if block != 0 {
-                    remove_blocks.push(block);
-                }
-                Ok((block != 0, false))
-            })?;
-            for b in remove_blocks {
-                Self::bitmap_unset(&mut self.bitmap_data, b);
-            }
-            Self::bitmap_unset(&mut self.bitmap_inode, d.inode as usize);
-            debug!("remove directory entry");
-            if index == entries_size {
-                // last entry
-            } else {
-                // just break the linked list
-            }
-            Ok(())
-        }
+        Self::bitmap_unset(&mut self.bitmap_inode, d.inode as usize);
+        let mut others = entries.into_iter().filter(|x| x.inode != d.inode).collect::<Vec<_>>();
+        self.format_directory_entries(&mut others)?;
+        // TODO: free blocks used by dir entries
+        self.apply_directory_entries(parent, &others, 0)?;
+        Ok(())
     }
 }

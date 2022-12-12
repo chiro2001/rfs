@@ -70,7 +70,8 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
     }
 
     fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEmpty) {
-        todo!()
+        rep!(reply, self.rfs_unlink(parent as usize, name.to_str().unwrap()));
+        reply.ok();
     }
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32,
