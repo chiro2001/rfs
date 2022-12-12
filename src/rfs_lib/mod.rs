@@ -330,20 +330,7 @@ impl<T: DiskDriver> RFS<T> {
         if inode.i_mode as usize >> 12 != Ext2FileType::Directory.into() {
             return Err(anyhow!("ino {} is not a directory!", ino));
         }
-        prv!(inode);
-        // TODO: walk all blocks, including indirect blocks
-        // let offset = offset as usize;
-        // let size = size as usize;
-        // let sz = self.block_size();
-        // let ino = RFS::<T>::shift_ino(ino);
-        //
-        // let mut blocks: Vec<usize> = vec![];
-        //
-        // rep!(reply, self.walk_blocks_inode(ino, offset / self.block_size(), &mut |block, index| {
-        //     debug!("walk to block {} index {}", block, index);
-        //     blocks.push(block);
-        //     Ok(index * sz < size)
-        // }));
+        // prv!(inode);
 
         let mut blocks = vec![];
         blocks.extend_from_slice(&inode.i_block);
