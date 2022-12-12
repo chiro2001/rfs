@@ -586,26 +586,6 @@ impl<T: DiskDriver> RFS<T> {
             // let base_block_number = inode.i_block[13];
             loop {
                 let block_number = inode.i_block[13] as usize;
-                let offset = ((i - self.threshold(1)) / layer_size) << 2;
-                let layer_slice = &mut layer_data[0][offset..offset + 4];
-                buf_u32.copy_from_slice(layer_slice);
-                let block = u32::from_be_bytes(buf_u32.clone()) as usize;
-
-                let block_number2 = block;
-                let offset2 = ((i - 12) % layer_size) << 2;
-                let layer_slice2 = &mut layer_data[1][offset2..offset2 + 4];
-                buf_u32.copy_from_slice(layer_slice2);
-                let block2 = u32::from_be_bytes(buf_u32.clone()) as usize;
-                debug!("ldata[0][{}..+4] = {}, ldata[1][{}..+4] = {}", offset, block, offset2, block2);
-
-                if layer_index[1] != block_number2 && block_number2 != 0 {
-                    debug!("L2.1: saving layer index data at block {}", layer_index[1]);
-                    dump_index_table!(1);
-                    debug!("L2.1: getting layer index data for new block {}", block_number2);
-                    self.read_data_block(block_number2, &mut layer_data[1])?;
-                    layer_index[1] = block_number2;
-                }
-
                 if layer_index[0] != block_number && block_number != 0 {
                     debug!("L2.0: saving layer index data at block {}", layer_index[0]);
                     dump_index_table!(0);
@@ -614,15 +594,35 @@ impl<T: DiskDriver> RFS<T> {
                     layer_index[0] = block_number;
                 }
 
+                let offset = ((i - self.threshold(1)) / layer_size) << 2;
+                let layer_slice = &mut layer_data[0][offset..offset + 4];
+                buf_u32.copy_from_slice(layer_slice);
+                let block_number2 = u32::from_be_bytes(buf_u32.clone()) as usize;
+                if layer_index[1] != block_number2 && block_number2 != 0 {
+                    debug!("L2.1: saving layer index data at block {}", layer_index[1]);
+                    dump_index_table!(1);
+                    debug!("L2.1: getting layer index data for new block {}", block_number2);
+                    self.read_data_block(block_number2, &mut layer_data[1])?;
+                    layer_index[1] = block_number2;
+                }
+
+                let offset2 = ((i - 12) % layer_size) << 2;
+                let layer_slice2 = &mut layer_data[1][offset2..offset2 + 4];
+                buf_u32.copy_from_slice(layer_slice2);
+                let block2 = u32::from_be_bytes(buf_u32.clone()) as usize;
+                debug!("ldata[0][{}..+4] = {}, ldata[1][{}..+4] = {}", offset, block_number2, offset2, block2);
+
                 let r = f(block2, i)?;
                 if r.1 {
-                    if block == 0 {
+                    if block_number2 == 0 {
                         let new_block = self.allocate_block()? as u32;
                         debug!("full, allocate on layer 1, new block: {}, offset: {}", new_block, offset);
                         let layer_index_data = self.create_block_vec();
                         self.write_data_block(new_block as usize, &layer_index_data)?;
                         layer_data[0][offset..offset + 4].copy_from_slice(&new_block.to_be_bytes());
                         layer_modified[0] = true;
+                        self.read_data_block(new_block as usize, &mut layer_data[1])?;
+                        layer_index[1] = new_block as usize;
                     }
                     let new_block = self.allocate_block()? as u32;
                     layer_data[1][offset2..offset2 + 4].copy_from_slice(&new_block.to_be_bytes());
@@ -631,7 +631,8 @@ impl<T: DiskDriver> RFS<T> {
                     if !r.0 {
                         dump_index_table!(0);
                         dump_index_table!(1);
-                        save_inode_and_exit!(layer_modified[0]);
+                        // save_inode_and_exit!(layer_modified[0]);
+                        if layer_modified[0] { self.set_inode(ino, &inode)?; }
                         save_inode_and_exit!(layer_modified[1]);
                     }
                     break;
