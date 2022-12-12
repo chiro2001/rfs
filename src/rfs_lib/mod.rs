@@ -24,7 +24,7 @@ pub mod fuse;
 use utils::*;
 use mem::*;
 use desc::*;
-use crate::{DEVICE_FILE, ENABLE_CACHING, FORCE_FORMAT, LAYOUT_FILE, MKFS_FORMAT, prv};
+use crate::{DEVICE_FILE, FORCE_FORMAT, LAYOUT_FILE, MKFS_FORMAT, prv};
 
 /// Data TTL, 1 second default
 const TTL: Duration = Duration::from_secs(1);
@@ -246,10 +246,6 @@ impl<T: DiskDriver> RFS<T> {
         let block_number = ino / inodes_per_block + self.get_group_desc().bg_inode_table as usize;
         // prv!(ino, block_number, offset / EXT2_INODE_SIZE);
         Ok((block_number, offset))
-    }
-
-    fn is_caching() -> bool {
-        ENABLE_CACHING.read().unwrap().clone()
     }
 
     /// Read inode struct according to ino number
@@ -935,11 +931,9 @@ impl<T: DiskDriver> RFS<T> {
             reserved_blocks
         } else { self.super_block.s_first_ino as usize + 1 })?;
         Self::bitmap_set(bitmap, block_free);
-        if !RFS::<T>::is_caching() {
-            // save bitmap
-            let bitmap_clone: Vec<u8> = bitmap.clone();
-            self.write_data_block(bitmap_block, &bitmap_clone)?;
-        }
+        // save bitmap
+        let bitmap_clone: Vec<u8> = bitmap.clone();
+        self.write_data_block(bitmap_block, &bitmap_clone)?;
         Ok(block_free)
     }
 

@@ -23,9 +23,9 @@ struct CacheItem {
 /// let mut cache = LruCache::<u64, Vec<u8>>::new(NonZeroUsize::new(2).unwrap());
 /// let tag = 0x114514 as u64;
 /// let raw_data = vec![0x55 as u8; 2];
-/// cache.put(tag, raw_data.clone());
-/// cache.put(tag + 1, raw_data.clone());
-/// cache.put(tag + 2, raw_data.clone());
+/// cache.push(tag, raw_data.clone());
+/// cache.push(tag + 1, raw_data.clone());
+/// cache.push(tag + 2, raw_data.clone());
 /// let data = cache.get(&tag).unwrap();
 /// assert_eq!(data, &raw_data);
 /// ```
@@ -33,10 +33,8 @@ pub struct CacheDiskDriver<T: DiskDriver> {
     inner: T,
     info: CacheDiskInfo,
     cache: LruCache<u64, CacheItem>,
-    // cache: LruCache<u64, Vec<u8>>,
     offset: i64,
     block_log: u64,
-    size_mask: u64,
 }
 
 pub fn int_log2(a: u64) -> u64 {
@@ -69,24 +67,35 @@ impl<T: DiskDriver> CacheDiskDriver<T> {
         info.unit = unit.clone();
         inner.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf).unwrap();
         info.size = u32::from_le_bytes(buf.clone());
-        debug!("cache init, disk size: {:x}, disk unit: {:x}", info.size, info.unit);
-        Self {
-            inner,
-            info,
-            cache: LruCache::new(NonZeroUsize::new(size).unwrap()),
-            offset: 0,
-            block_log: int_log2(unit as u64),
-            size_mask: (1 << (int_log2(size as u64) as usize)) - 1,
-        }
+        let block_log = int_log2(unit as u64);
+        let cache = LruCache::new(NonZeroUsize::new(size).unwrap());
+        debug!("cache init, cache size: {}, disk size: {:x}, disk unit: {:x}; block_log: {}",
+            size, info.size, info.unit, block_log);
+        Self { inner, info, cache, offset: 0, block_log }
     }
 
     /// address = [ TAG | OFFSET ]
     fn get_tag(&self, address: u64) -> u64 {
-        (address >> self.block_log) & self.size_mask
+        address >> self.block_log
     }
 
     fn get_offset_tag(&self) -> u64 {
         self.get_tag(self.offset as u64)
+    }
+
+    fn write_back_item(&mut self, replaced: Option<(u64, CacheItem)>) -> Result<()> {
+        match replaced {
+            Some((tag, item)) => {
+                if item.dirty {
+                    let address = tag << self.block_log;
+                    debug!("cache write back to {:x}", address);
+                    let unit = self.info.unit as usize;
+                    self.inner.ddriver_write(&item.data, unit)?;
+                }
+            }
+            None => {}
+        };
+        Ok(())
     }
 }
 
@@ -149,7 +158,8 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
                     data.copy_from_slice(buf);
                     debug!("write newed:");
                     show_hex_debug(&data[..0x20], 0x10);
-                    self.cache.put(tag, CacheItem { data, dirty: true });
+                    let replaced = self.cache.push(tag, CacheItem { data, dirty: true });
+                    self.write_back_item(replaced)?;
                     self.offset += unit as i64;
                     Ok(unit)
                 }
@@ -187,7 +197,8 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
                     let sz = self.inner.ddriver_read(&mut data, size)?;
                     buf.copy_from_slice(&data);
                     show_hex_debug(&data[..0x20], 0x10);
-                    self.cache.put(tag, CacheItem { data, dirty: false });
+                    let replaced = self.cache.push(tag, CacheItem { data, dirty: false });
+                    self.write_back_item(replaced)?;
                     self.offset += sz as i64;
                     Ok(sz)
                 }
