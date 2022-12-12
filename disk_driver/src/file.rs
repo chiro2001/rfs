@@ -7,9 +7,9 @@ use log::*;
 use crate::*;
 
 /// 4MiB size
-const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400;
+// const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400;
 /// 1 GiB size
-// const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400 * 0x100;
+const FILE_DISK_SIZE: usize = 1 * 0x400 * 0x400 * 0x400;
 
 const FILE_DISK_UNIT: usize = 512;
 
@@ -106,6 +106,7 @@ impl DiskDriver for FileDiskDriver {
     }
 
     fn ddriver_reset(&mut self) -> Result<()> {
+        self.ddriver_seek(0, SeekType::Set)?;
         self.ddriver_write(&[0].repeat(self.info.consts.layout_size as usize), self.info.consts.layout_size.try_into().unwrap())?;
         self.info = DiskInfo::default();
         Ok(())
@@ -122,18 +123,24 @@ impl DiskDriver for FileDiskDriver {
 }
 
 impl FileDiskDriver {
-    pub fn new(path: &str) -> Self {
+    pub fn new(path: &str, layout_size: u32, iounit_size: u32) -> Self {
         Self {
             info: DiskInfo {
                 stats: Default::default(),
                 consts: DiskConst {
-                    layout_size: FILE_DISK_SIZE as u32,
-                    iounit_size: FILE_DISK_UNIT as u32,
+                    layout_size,
+                    iounit_size,
                     ..Default::default()
                 },
             },
             file: if path.is_empty() { None } else { Some(File::open(path).unwrap()) },
         }
+    }
+}
+
+impl Default for FileDiskDriver {
+    fn default() -> Self {
+        FileDiskDriver::new("", FILE_DISK_SIZE as u32, FILE_DISK_UNIT as u32)
     }
 }
 

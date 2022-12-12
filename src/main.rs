@@ -28,10 +28,16 @@ fn main() -> Result<()> {
             .required(false))
         .arg(arg!(--format "Format disk").action(ArgAction::SetTrue)
             .required(false))
-        .arg(arg!(-c --cache "Enable caching").action(ArgAction::SetTrue)
-            .required(false))
         .arg(arg!(--mkfs "Use mkfs.ext2 to format disk").action(ArgAction::SetTrue)
             .required(false))
+        .arg(arg!(-c --cache "Enable caching").action(ArgAction::SetTrue)
+            .required(false))
+        .arg(
+            arg!(--cache_size <CACHE_SIZE> "Size of cache in blocks")
+                .required(false)
+                .value_parser(clap::value_parser!(u32).range(4..))
+                .default_value("32"),
+        )
         .arg(arg!(-r --read_only "Mount as read only filesystem").action(ArgAction::SetTrue)
             .required(false))
         .arg(arg!(-v --verbose "Print more debug information, or set `RUST_LOG=debug`").action(ArgAction::SetTrue)
@@ -42,9 +48,21 @@ fn main() -> Result<()> {
                 .default_value("ddriver"),
         )
         .arg(
+            arg!(-s --size <DISK_SIZE> "Size of disk in MiB")
+                .required(false)
+                .value_parser(clap::value_parser!(u32).range(1..))
+                .default_value("4"),
+        )
+        .arg(
+            arg!(--unit <UNIT> "IO unit of disk in bytes")
+                .required(false)
+                .value_parser(clap::value_parser!(u32).range(1..))
+                .default_value("512"),
+        )
+        .arg(
             arg!(-l --layout <FILE> "Select layout file for formatting disk")
                 .required(false)
-                .default_value("include/fs.layout"),
+                .default_value("none"),
         )
         .get_matches();
 
@@ -68,6 +86,10 @@ fn main() -> Result<()> {
     MKFS_FORMAT.set(matches.get_flag("mkfs")).unwrap();
     // MKFS_FORMAT.set(true).unwrap();
     ENABLE_CACHING.set(matches.get_flag("cache")).unwrap();
+
+    let disk_size = matches.get_one::<u32>("size").unwrap().clone() * 0x400 * 0x400;
+    let disk_unit = matches.get_one::<u32>("unit").unwrap().clone();
+    let cache_size = matches.get_one::<u32>("cache_size").unwrap().clone();
 
     macro_rules! umount {
         () => {
@@ -115,9 +137,11 @@ fn main() -> Result<()> {
             match retry_with_index(Fixed::from_millis(100), |current_try| {
                 info!("[try {}/{}] Mount to {}", current_try, retry_times, abspath_mountpoint);
                 let res = if ENABLE_CACHING.read().unwrap().clone() {
-                    mount2(RFS::new(CacheDiskDriver::new(FileDiskDriver::new(""), 32)), abspath_mountpoint, &options)
+                    mount2(RFS::new(CacheDiskDriver::new(
+                        FileDiskDriver::new("", disk_size, disk_unit), cache_size as usize)
+                    ), abspath_mountpoint, &options)
                 } else {
-                    mount2(RFS::new(FileDiskDriver::new("")), abspath_mountpoint, &options)
+                    mount2(RFS::new(FileDiskDriver::new("", disk_size, disk_unit)), abspath_mountpoint, &options)
                 };
                 match res {
                     Ok(_) => {

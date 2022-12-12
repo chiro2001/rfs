@@ -2,7 +2,7 @@
 use std::ffi::OsStr;
 use std::time::SystemTime;
 use disk_driver::DiskDriver;
-use fuser::{Filesystem, KernelConfig, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyDirectoryPlus, ReplyEmpty, ReplyEntry, ReplyWrite, ReplyXattr, Request, TimeOrNow};
+use fuser::{Filesystem, KernelConfig, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow};
 use libc::{c_int, ENOENT};
 use log::*;
 use crate::rfs_lib::desc::Ext2FileType;
