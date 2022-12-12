@@ -1156,8 +1156,9 @@ impl<T: DiskDriver> RFS<T> {
         let size = data.len() as usize;
         if offset as usize % sz != 0 {
             debug!("unaligned write! offset=0x{:x}, len={}", offset, size);
-            let offset_aligned = down_align(offset as usize, int_log2(sz as u64) as usize);
-            let size_aligned = up_align(size, int_log2(sz as u64) as usize);
+            let sz_log = int_log2(sz as u64) as usize;
+            let offset_aligned = down_align(offset as usize, sz_log);
+            let size_aligned = up_align(size, sz_log);
             let mut data_read = self.rfs_read(ino, offset_aligned as i64, size_aligned as u32)?;
             // let mut data_read = self.rfs_read(ino, offset_aligned as i64, size as u32)?;
             data_read[(offset as usize - offset_aligned)..(size + offset as usize - offset_aligned)].copy_from_slice(data);
