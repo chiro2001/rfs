@@ -134,7 +134,7 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
         let unit_log = self.block_log;
         assert_eq!(0, size % unit);
         debug!("cache writing data at {:x}, size: {:x}:", self.offset, size);
-        show_hex_debug(&buf[..0x20], 0x10);
+        // show_hex_debug(&buf[..0x20], 0x10);
         if size != unit {
             warn!("not read one disk block! size = 0x{:x}", size);
             let mut sz: usize = 0;
@@ -152,7 +152,7 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
                     item.data.copy_from_slice(buf);
                     item.dirty = true;
                     debug!("write updated:");
-                    show_hex_debug(&item.data[..0x20], 0x10);
+                    // show_hex_debug(&item.data[..0x20], 0x10);
                     self.offset += unit as i64;
                     Ok(unit)
                 }
@@ -164,7 +164,7 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
                     // let sz = self.inner.ddriver_read(&mut data, size)?;
                     data.copy_from_slice(buf);
                     debug!("write newed:");
-                    show_hex_debug(&data[..0x20], 0x10);
+                    // show_hex_debug(&data[..0x20], 0x10);
                     let replaced = self.cache.push(tag, CacheItem { data, dirty: true });
                     self.write_back_item(replaced)?;
                     self.offset += unit as i64;
@@ -197,7 +197,7 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
                 Some(item) => {
                     debug!("read hit!");
                     buf.copy_from_slice(&item.data);
-                    show_hex_debug(&item.data[..0x20], 0x10);
+                    // show_hex_debug(&item.data[..0x20], 0x10);
                     self.offset += unit as i64;
                     Ok(unit)
                 }
@@ -207,7 +207,7 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
                     let mut data = vec![0 as u8; unit];
                     let sz = self.inner.ddriver_read(&mut data, size)?;
                     buf.copy_from_slice(&data);
-                    show_hex_debug(&data[..0x20], 0x10);
+                    // show_hex_debug(&data[..0x20], 0x10);
                     let replaced = self.cache.push(tag, CacheItem { data, dirty: false });
                     self.write_back_item(replaced)?;
                     self.offset += sz as i64;

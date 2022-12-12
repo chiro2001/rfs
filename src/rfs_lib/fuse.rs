@@ -99,6 +99,17 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
         reply.written(written);
     }
 
+    fn flush(&mut self, _req: &Request<'_>, _ino: u64, _fh: u64, _lock_owner: u64, reply: ReplyEmpty) {
+        rep!(reply, self.rfs_dump());
+        reply.ok();
+    }
+
+    fn release(&mut self, _req: &Request<'_>, _ino: u64, _fh: u64, _flags: i32, _lock_owner: Option<u64>, _flush: bool, reply: ReplyEmpty) {
+        rep!(reply, self.rfs_dump());
+        reply.ok();
+    }
+
+
     fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
         prv!("readdir", ino, offset);
         rep!(reply, entries, self.rfs_readdir(ino, offset));
@@ -108,6 +119,11 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
             debug!("readdir entry[{}] [{}]", o, d.to_string());
             let _ = reply.add(d.inode as u64, (o + 1) as i64, inode.to_attr(d.inode as usize, self.block_size()).kind, d.get_name());
         }
+        reply.ok();
+    }
+
+    fn releasedir(&mut self, _req: &Request<'_>, _ino: u64, _fh: u64, _flags: i32, reply: ReplyEmpty) {
+        rep!(reply, self.rfs_dump());
         reply.ok();
     }
 
