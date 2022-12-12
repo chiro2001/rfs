@@ -324,7 +324,7 @@ impl<T: DiskDriver> RFS<T> {
             debug!("next p: {:x}; dir: {}", p, dir.to_string());
             dirs.push(dir);
         }
-        if !dirs.is_empty() { debug!("last dir entry: {} {:?}", dirs.last().unwrap().to_string(), dirs.last().unwrap()); }
+        if !dirs.is_empty() { debug!("last dir entry: {}", dirs.last().unwrap().to_string()); }
         Ok(dirs)
     }
 
@@ -790,7 +790,7 @@ impl<T: DiskDriver> RFS<T> {
             let mut block_data = [0 as u8].repeat(block_size);
             offset = 0;
             for (i, entry) in entries.iter().enumerate() {
-                debug!("write directory entry {} {:?}", entry.to_string(), entry);
+                debug!("write directory entry {}", entry.to_string());
                 if i != entries_len - 1 {
                     debug!("write offset [{}..{}]", offset, offset + entry.rec_len as usize);
                     block_data[offset..offset + entry.rec_len as usize]
@@ -866,40 +866,36 @@ impl<T: DiskDriver> RFS<T> {
         debug!("parent inode blocks: {:x?}", inode_parent.i_block);
         debug!("write entry to buf, rec_len = {}", entry.rec_len);
         let mut data_block = self.create_block_vec();
-        // self.read_block(&mut data_block)?;
         self.read_data_block(inode_parent.i_block[last_block_i] as usize, &mut data_block)?;
-        debug!("original data_block:");
-        show_hex_debug(&data_block[..0x50], 0x10);
+        // debug!("original data_block:");
+        // show_hex_debug(&data_block[..0x50], 0x10);
         if reset_last_rec_len {
             debug!("write back modified parent entries");
             let parent_entries_tail = parent_enties.len() - 1;
             let mut parent_entries_last = parent_enties[parent_entries_tail].clone();
-            debug!("parent_entries_last: {} {:?}", parent_entries_last.to_string(), parent_entries_last);
+            debug!("parent_entries_last: {}", parent_entries_last.to_string());
             let parent_entries_last_rec_len_old = parent_entries_last.rec_len as usize;
             let offset_start = self.block_size() - parent_entries_last_rec_len_old;
             parent_entries_last.rec_len = (up_align((parent_entries_last.name_len + 8) as usize, 4)) as u16;
-            debug!("parent_entries_last updated: {} {:?}", parent_entries_last.to_string(), parent_entries_last);
+            debug!("parent_entries_last updated: {}", parent_entries_last.to_string());
             let parent_entries_last_data = unsafe { serialize_row(&parent_entries_last) };
-            // data_block[offset_cnt - parent_entries_last_rec_len_old as usize..offset_cnt + (parent_entries_last.rec_len - parent_entries_last_rec_len_old) as usize]
-            //     .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
             let offset_next = offset_start + parent_entries_last.rec_len as usize;
             debug!("data_block update: [{:x}..{:x}]", offset_start, offset_next);
             data_block[offset_start..offset_next]
                 .copy_from_slice(&parent_entries_last_data[..parent_entries_last.rec_len as usize]);
-            // offset_cnt = up_align(offset_cnt, 4);
-            debug!("data_block after update:");
-            show_hex_debug(&data_block[..0x50], 0x10);
+            // debug!("data_block after update:");
+            // show_hex_debug(&data_block[..0x50], 0x10);
             offset_cnt = offset_next;
         }
         let old_rec_len = entry.rec_len;
         let offset_next = offset_cnt + old_rec_len as usize;
         entry.rec_len = (self.block_size() - offset_cnt) as u16;
-        debug!("new entry to write: {} {:?}", entry.to_string(), entry);
+        debug!("new entry to write: {}", entry.to_string());
         let entry_data = unsafe { serialize_row(&entry) };
         debug!("update data_block for entry_data: [{:x}..{:x}]", offset_cnt, offset_next);
         data_block[offset_cnt..offset_next].copy_from_slice(&entry_data[..old_rec_len as usize]);
-        debug!("data_block to write:");
-        show_hex_debug(&data_block[..0x50], 0x10);
+        // debug!("data_block to write:");
+        // show_hex_debug(&data_block[..0x50], 0x10);
         debug!("write back buf block: {}", inode_parent.i_block[last_block_i]);
         self.write_data_block(inode_parent.i_block[last_block_i] as usize, &data_block)?;
         let attr = inode.to_attr(ino_free, self.block_size());
@@ -1029,6 +1025,7 @@ impl<T: DiskDriver> RFS<T> {
             } else {
                 // use manual fs layout
                 // reload disk driver
+                self.get_driver().ddriver_flush()?;
                 self.seek_block(0)?;
                 let default_layout_str = "
 | BSIZE = 1024 B |
