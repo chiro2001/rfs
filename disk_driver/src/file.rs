@@ -7,9 +7,9 @@ use log::*;
 use crate::*;
 
 /// 4MiB size
-// const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400;
+const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400;
 /// 1 GiB size
-const FILE_DISK_SIZE: usize = 1 * 0x400 * 0x400 * 0x400;
+// const FILE_DISK_SIZE: usize = 1 * 0x400 * 0x400 * 0x400;
 
 const FILE_DISK_UNIT: usize = 512;
 
@@ -39,7 +39,7 @@ impl DiskDriver for FileDiskDriver {
         }
         self.file = Some(OpenOptions::new().read(true).write(true).open(path)?);
         let filesize = self.get_file().metadata()?.len();
-        debug!("file size: {}", filesize);
+        debug!("disk size: 0x{:x}; file size: 0x{:x}", self.info.consts.layout_size, filesize);
         // padding zero to filesize
         if filesize < self.info.consts.layout_size.into() {
             debug!("too small file, write zeros for padding");
@@ -60,7 +60,7 @@ impl DiskDriver for FileDiskDriver {
         if whence == SeekType::Set {
             debug!("disk seek to {:x}", offset);
             if offset > self.info.consts.layout_size.into() {
-                panic!("SEEK OUT! size is {:x}, offset = {:x}", self.info.consts.layout_size, offset);
+                panic!("SEEK OUT! size is 0x{:x}, offset = 0x{:x}", self.info.consts.layout_size, offset);
             }
         }
         Ok(self.get_file().seek(match whence {
@@ -111,7 +111,7 @@ impl DiskDriver for FileDiskDriver {
     fn ddriver_reset(&mut self) -> Result<()> {
         self.ddriver_seek(0, SeekType::Set)?;
         self.ddriver_write(&[0].repeat(self.info.consts.layout_size as usize), self.info.consts.layout_size.try_into().unwrap())?;
-        self.info = DiskInfo::default();
+        // self.info = DiskInfo::default();
         Ok(())
     }
 
@@ -127,6 +127,7 @@ impl DiskDriver for FileDiskDriver {
 
 impl FileDiskDriver {
     pub fn new(path: &str, layout_size: u32, iounit_size: u32) -> Self {
+        warn!("FileDiskDriver new, path={}, size=0x{:x}, iosz={}", path, layout_size, iounit_size);
         let mut r = Self {
             info: DiskInfo {
                 stats: Default::default(),
