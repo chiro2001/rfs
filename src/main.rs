@@ -118,9 +118,9 @@ fn main() -> Result<()> {
             match retry_with_index(Fixed::from_millis(100), |current_try| {
                 info!("[try {}/{}] Mount to {}", current_try, retry_times, abspath_mountpoint);
                 let res = if ENABLE_CACHING.read().unwrap().clone() {
-                    fuse::mount(RFS::new(CacheDiskDriver::new(FileDiskDriver::new(""), 512)), abspath_mountpoint, &options)
+                    fuser::mount(RFS::new(CacheDiskDriver::new(FileDiskDriver::new(""), 512)), abspath_mountpoint, &options)
                 } else {
-                    fuse::mount(RFS::new(FileDiskDriver::new("")), abspath_mountpoint, &options)
+                    fuser::mount(RFS::new(FileDiskDriver::new("")), abspath_mountpoint, &options)
                 };
                 match res {
                     Ok(_) => {

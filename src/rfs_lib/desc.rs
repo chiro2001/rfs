@@ -9,7 +9,7 @@
 use std::mem::size_of;
 use std::time::{SystemTime, UNIX_EPOCH};
 use chrono::{DateTime, NaiveDateTime, Utc};
-use fuse::{FileAttr, FileType};
+use fuser::{FileAttr, FileType};
 use log::debug;
 use rand::Rng;
 use crate::prv;
@@ -374,7 +374,7 @@ pub enum Ext2FileType {
 }
 
 impl Ext2INode {
-    pub fn to_attr(&self, ino: usize) -> FileAttr {
+    pub fn to_attr(&self, ino: usize, blksize: usize) -> FileAttr {
         prv!("to_attr", ino, self);
         let kind = match self.i_mode >> 12 {
             0x1 => FileType::NamedPipe,
@@ -405,6 +405,7 @@ impl Ext2INode {
             uid: self.i_uid as u32 + (self.i_uid_high as u32) << 16,
             gid: self.i_gid as u32 + (self.i_uid_high as u32) << 16,
             rdev: 0,
+            blksize: blksize as u32,
             flags: 0,
         }
     }

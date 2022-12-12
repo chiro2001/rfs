@@ -902,7 +902,7 @@ impl<T: DiskDriver> RFS<T> {
         show_hex_debug(&data_block[..0x50], 0x10);
         debug!("write back buf block: {}", inode_parent.i_block[last_block_i]);
         self.write_data_block(inode_parent.i_block[last_block_i] as usize, &data_block)?;
-        let attr = inode.to_attr(ino_free);
+        let attr = inode.to_attr(ino_free, self.block_size());
         debug!("file {} == {} created! attr: {:?}", name, entry.get_name(), attr);
 
         match node_type {
@@ -1180,6 +1180,7 @@ impl<T: DiskDriver> RFS<T> {
         let group: Ext2GroupDesc = unsafe { deserialize_row(&data_block) };
         // debug!("group desc data: {:x?}", data_block);
         debug!("group: {:x?}", group);
+        self.group_desc_table.clear();
         self.group_desc_table.push(group);
 
         let bg_block_bitmap = self.get_group_desc().bg_block_bitmap as usize;

@@ -6,9 +6,10 @@ extern crate core;
 use core::mem::{align_of, forget, size_of};
 use core::slice::{from_raw_parts, from_raw_parts_mut};
 use std::os::raw::c_int;
-use fuse::{ReplyAttr, ReplyData, ReplyDirectory};
+use fuser::{ReplyAttr, ReplyData, ReplyDirectory, TimeOrNow};
 use log::debug;
 use std::env::set_var;
+use std::time::SystemTime;
 
 pub trait VecExt {
     /// Casts a `Vec<T>` into a `Vec<U>`.
@@ -265,6 +266,16 @@ pub fn init_logs() {
     let logging_level = std::env::var("RUST_LOG");
     if logging_level.is_err() { set_var("RUST_LOG", "info"); }
     env_logger::init();
+}
+
+pub fn time_or_now_convert(t: Option<TimeOrNow>) -> Option<SystemTime> {
+    match t {
+        None => None,
+        Some(t) => Some(match t {
+            TimeOrNow::SpecificTime(t) => t,
+            TimeOrNow::Now => SystemTime::now(),
+        })
+    }
 }
 
 #[cfg(test)]

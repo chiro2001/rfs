@@ -11,6 +11,7 @@ struct CacheDiskInfo {
 }
 
 #[derive(Debug, Default, Clone)]
+#[allow(dead_code)]
 struct CacheItem {
     valid: bool,
     data: Vec<u8>,
