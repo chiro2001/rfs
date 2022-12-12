@@ -1,4 +1,3 @@
-use std::collections::BinaryHeap;
 use std::num::NonZeroUsize;
 use anyhow::Result;
 use log::{debug, warn};
@@ -15,73 +14,6 @@ struct CacheDiskInfo {
 struct CacheItem {
     dirty: bool,
     data: Vec<u8>,
-}
-
-#[derive(Eq, Ord, PartialEq, PartialOrd)]
-struct MyLruCacheEntry<K: Eq + Ord, V: Ord> {
-    key: K,
-    value: V,
-}
-
-impl<K: Eq + Ord, V: Ord> MyLruCacheEntry<K, V> {
-    pub fn new(key: K, value: V) -> Self {
-        Self { key, value }
-    }
-}
-
-struct MyLruCache<K: Eq + Ord, V: Ord> {
-    size: usize,
-    data: BinaryHeap<MyLruCacheEntry<K, V>>,
-}
-
-impl<K: Eq + Ord, V: Ord> MyLruCache<K, V> {
-    pub fn new(size: usize) -> Self {
-        Self { size, data: BinaryHeap::new() }
-    }
-
-    pub fn push(&mut self, tag: K, data: V) -> Option<(K, V)> {
-        let poped = if self.data.len() == self.size {
-            self.data.pop()
-        } else {
-            None
-        };
-        self.data.push(MyLruCacheEntry::new(tag, data));
-        match poped {
-            Some(e) => Some((e.key, e.value)),
-            None => None
-        }
-    }
-
-    pub fn get<'a, Q>(&mut self, tag: &K) -> Option<&'a V> {
-        // self.data.
-        // match self.data.peek() {
-        //     Some(e) => Some(&e.value),
-        //     None => None
-        // }
-        None
-    }
-
-    pub fn get_mut<'a, Q>(&'a mut self, k: &Q) -> Option<&'a mut V> {
-        None
-    }
-
-    pub fn clear(&mut self) {}
-}
-
-impl<K: Eq + Ord, V: Ord> Iterator for MyLruCache<K, V> {
-    type Item = (K, V);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        None
-    }
-}
-
-impl<K: Eq + Ord, V: Ord> Iterator for &MyLruCache<K, V> {
-    type Item = (K, V);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        None
-    }
 }
 
 /// Test LRU:
@@ -101,7 +33,6 @@ pub struct CacheDiskDriver<T: DiskDriver> {
     inner: T,
     info: CacheDiskInfo,
     cache: LruCache<u64, CacheItem>,
-    // cache: MyLruCache<u64, CacheItem>,
     offset: i64,
     block_log: u64,
 }
