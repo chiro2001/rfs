@@ -24,7 +24,7 @@ pub mod fuse;
 use utils::*;
 use mem::*;
 use desc::*;
-use crate::{DEVICE_FILE, FORCE_FORMAT, LAYOUT_FILE, MKFS_FORMAT, prv};
+use crate::{DEVICE_FILE, FORCE_FORMAT, LAYOUT_FILE, MKFS_FORMAT};
 
 /// Data TTL, 1 second default
 const TTL: Duration = Duration::from_secs(1);
@@ -1257,8 +1257,8 @@ impl<T: DiskDriver> RFS<T> {
             Some(d) => d.clone(),
             None => return Err(anyhow!("No such of file {}!", name)),
         };
-        debug!("get file inode");
-        let inode = self.get_inode(d.inode as usize)?;
+        // debug!("get file inode");
+        // let inode = self.get_inode(d.inode as usize)?;
         debug!("unset bitmaps");
         let mut remove_blocks = vec![];
         self.visit_blocks_inode(d.inode as usize, 0, &mut |block, index| {
