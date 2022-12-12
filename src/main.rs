@@ -5,6 +5,7 @@ use std::process::Stdio;
 use clap::{arg, ArgAction, command};
 // use crate::hello::HelloFS;
 use anyhow::{anyhow, Result};
+use disk_driver::cache::CacheDiskDriver;
 use disk_driver::file::FileDiskDriver;
 use execute::Execute;
 use fork::{Fork, fork};
@@ -116,7 +117,11 @@ fn main() -> Result<()> {
         Ok(Fork::Child) => {
             match retry_with_index(Fixed::from_millis(100), |current_try| {
                 info!("[try {}/{}] Mount to {}", current_try, retry_times, abspath_mountpoint);
-                let res = fuse::mount(RFS::new(FileDiskDriver::new("")), abspath_mountpoint, &options);
+                let res = if ENABLE_CACHING.read().unwrap().clone() {
+                    fuse::mount(RFS::new(CacheDiskDriver::new(FileDiskDriver::new(""))), abspath_mountpoint, &options)
+                } else {
+                    fuse::mount(RFS::new(FileDiskDriver::new("")), abspath_mountpoint, &options)
+                };
                 match res {
                     Ok(_) => {
                         info!("All Done.");

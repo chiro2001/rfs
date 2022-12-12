@@ -87,6 +87,7 @@ pub const IOC_REQ_DEVICE_IO_SZ: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('
 
 pub mod memory;
 pub mod file;
+pub mod cache;
 
 #[allow(dead_code)]
 fn driver_tester(driver: &mut dyn DiskDriver) -> Result<()> {
