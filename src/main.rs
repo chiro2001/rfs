@@ -1,5 +1,4 @@
 use std::env::set_var;
-use std::ffi::OsStr;
 use std::fs;
 use std::process::Stdio;
 use clap::{arg, ArgAction, command};
@@ -9,6 +8,7 @@ use disk_driver::cache::CacheDiskDriver;
 use disk_driver::file::FileDiskDriver;
 use execute::Execute;
 use fork::{Fork, fork};
+use fuser::{mount2, MountOption};
 use nix::sys::signal;
 use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
@@ -104,10 +104,7 @@ fn main() -> Result<()> {
     }
 
     let read_only = matches.get_flag("read_only");
-    let options = ["-o", if read_only { "ro" } else { "rw" }, "-o", "fsname=rfs"];
-    let options = options.iter()
-        .map(|o| o.as_ref())
-        .collect::<Vec<&OsStr>>();
+    let options = vec![if read_only { MountOption::RO } else { MountOption::RW }, MountOption::FSName("rfs".parse()?)];
     let retry_times = 3;
     match if matches.get_flag("front") { Ok(Fork::Child) } else { fork() } {
         Ok(Fork::Parent(child)) => {
@@ -118,9 +115,9 @@ fn main() -> Result<()> {
             match retry_with_index(Fixed::from_millis(100), |current_try| {
                 info!("[try {}/{}] Mount to {}", current_try, retry_times, abspath_mountpoint);
                 let res = if ENABLE_CACHING.read().unwrap().clone() {
-                    fuser::mount(RFS::new(CacheDiskDriver::new(FileDiskDriver::new(""), 512)), abspath_mountpoint, &options)
+                    mount2(RFS::new(CacheDiskDriver::new(FileDiskDriver::new(""), 512)), abspath_mountpoint, &options)
                 } else {
-                    fuser::mount(RFS::new(FileDiskDriver::new("")), abspath_mountpoint, &options)
+                    mount2(RFS::new(FileDiskDriver::new("")), abspath_mountpoint, &options)
                 };
                 match res {
                     Ok(_) => {
@@ -149,9 +146,7 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuse::Filesystem;
-    // use std::env;
-    use std::ffi::OsStr;
+    use fuser::Filesystem;
     use std::fs;
     use hello::HelloFS;
     use anyhow::Result;
@@ -170,11 +165,14 @@ mod tests {
         let mountpoint = path.to_str().unwrap();
         // let mountpoint = "/home/chiro/mnt";
         println!("mountpoint is {}", mountpoint);
-        let options = ["-o", "ro", "-o", "fsname=hello"]
-            .iter()
-            .map(|o| o.as_ref())
-            .collect::<Vec<&OsStr>>();
-        fuse::mount(HelloFS, mountpoint, &options).unwrap();
+        // let options = ["-o", "ro", "-o", "fsname=hello"]
+        //     .iter()
+        //     .map(|o| o.as_ref())
+        //     .collect::<Vec<&OsStr>>();
+        // #[allow(deprecated)]
+        // fuser::mount(HelloFS, mountpoint, &options).unwrap();
+        let options = vec![MountOption::RO, MountOption::FSName("hello".to_string()), MountOption::AllowOther];
+        fuser::mount2(HelloFS, mountpoint, &options).unwrap();
         Ok(())
     }
 

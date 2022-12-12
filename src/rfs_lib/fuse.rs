@@ -49,7 +49,7 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
         reply.attr(&TTL, &attr);
     }
 
-    fn mknod(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, umask: u32, rdev: u32, reply: ReplyEntry) {
+    fn mknod(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _umask: u32, _rdev: u32, reply: ReplyEntry) {
         prv!("mknod", parent, name, mode);
         rep!(reply, inode_info, self.make_node(parent as usize, name.to_str().unwrap(), mode as usize, Ext2FileType::RegularFile));
         let (ino, inode) = inode_info;
@@ -58,7 +58,7 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
         debug!("mknod done");
     }
 
-    fn mkdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, umask: u32, reply: ReplyEntry) {
+    fn mkdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _umask: u32, reply: ReplyEntry) {
         prv!("mkdir", parent, name, mode);
         rep!(reply, inode_info, self.make_node(parent as usize, name.to_str().unwrap(), mode as usize, Ext2FileType::Directory));
         let (ino, inode) = inode_info;
@@ -81,7 +81,7 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
         reply.written(written);
     }
 
-    fn readdir(&mut self, _req: &Request<'_>, ino: u64, fh: u64, offset: i64, mut reply: ReplyDirectory) {
+    fn readdir(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
         prv!("readdir", ino, offset);
         rep!(reply, entries, self.rfs_readdir(ino, offset));
         for (i, d) in entries.iter().enumerate() {
