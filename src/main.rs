@@ -35,7 +35,7 @@ fn main() -> Result<()> {
         .arg(
             arg!(--cache_size <CACHE_SIZE> "Size of cache in blocks")
                 .required(false)
-                .value_parser(clap::value_parser!(u32).range(4..))
+                .value_parser(clap::value_parser!(u32).range(1..))
                 .default_value("32"),
         )
         .arg(arg!(-r --read_only "Mount as read only filesystem").action(ArgAction::SetTrue)

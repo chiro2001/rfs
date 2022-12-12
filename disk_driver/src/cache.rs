@@ -72,7 +72,6 @@ impl<T: DiskDriver> CacheDiskDriver<T> {
         let block_log = int_log2(unit as u64);
         assert_eq!(1 << block_log, unit);
         let cache = LruCache::new(NonZeroUsize::new(size).unwrap());
-        // let cache = MyLruCache::new(size);
         debug!("cache init, cache size: {}, disk size: {:x}, disk unit: {:x}; block_log: {}",
             size, info.size, info.unit, block_log);
         Self { inner, info, cache, offset: 0, block_log }
@@ -120,12 +119,12 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
         if whence == SeekType::Set {
             debug!("cache seek to {:x}", offset);
         }
-        // self.inner.ddriver_seek(offset, whence)
         match whence {
             SeekType::Set => self.offset = offset,
             SeekType::Cur => self.offset += offset,
             SeekType::End => self.offset = self.info.size as i64 - offset,
         };
+        self.inner.ddriver_seek(offset, whence)?;
         // what's meaning?
         Ok(self.offset as u64)
     }
@@ -161,14 +160,13 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
                     debug!("write miss!");
                     self.inner.ddriver_seek(self.offset, SeekType::Set)?;
                     let mut data = vec![0 as u8; unit];
+                    // do not need to read again, new write will cover
                     // let sz = self.inner.ddriver_read(&mut data, size)?;
                     data.copy_from_slice(buf);
                     debug!("write newed:");
                     show_hex_debug(&data[..0x20], 0x10);
                     let replaced = self.cache.push(tag, CacheItem { data, dirty: true });
-                    // if replaced.is_some() && replaced.as_ref().unwrap().0 != tag {
                     self.write_back_item(replaced)?;
-                    // }
                     self.offset += unit as i64;
                     Ok(unit)
                 }
