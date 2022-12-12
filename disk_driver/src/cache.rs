@@ -22,9 +22,9 @@ impl<T: DiskDriver> CacheDiskDriver<T> {
         let mut info = CacheDiskInfo::default();
         let mut buf = [0 as u8; 4];
         inner.ddriver_ioctl(IOC_REQ_DEVICE_IO_SZ, &mut buf).unwrap();
-        info.unit = u32::from_be_bytes(buf.clone());
+        info.unit = u32::from_le_bytes(buf.clone());
         inner.ddriver_ioctl(IOC_REQ_DEVICE_SIZE, &mut buf).unwrap();
-        info.size = u32::from_be_bytes(buf.clone());
+        info.size = u32::from_le_bytes(buf.clone());
         debug!("cache init, disk size: {:x}, disk unit: {:x}", info.size, info.unit);
         Self {
             inner,
@@ -57,6 +57,7 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
     }
 
     fn ddriver_write(&mut self, buf: &[u8], size: usize) -> Result<usize> {
+        assert_eq!(0, size % self.info.unit as usize);
         self.inner.ddriver_seek(self.offset, SeekType::Set)?;
         let sz = self.inner.ddriver_write(buf, size)?;
         self.offset += sz as i64;
@@ -64,6 +65,7 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
     }
 
     fn ddriver_read(&mut self, buf: &mut [u8], size: usize) -> Result<usize> {
+        assert_eq!(0, size % self.info.unit as usize);
         self.inner.ddriver_seek(self.offset, SeekType::Set)?;
         let sz = self.inner.ddriver_read(buf, size)?;
         self.offset += sz as i64;
