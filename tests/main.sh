@@ -97,12 +97,15 @@ function fail() {
 # Utils
 function mount_fuse() {
     cargo run -- --device="$HOME"/ddriver "${MNTPOINT}"
+    sleep 1
 }
 
 function check_mount() {
     if ! mount | grep -e "^${PROJECT_NAME}\s" >/dev/null; then
+        sleep 1
         return 1
     fi
+    sleep 1
     return 0
 }
 
