@@ -333,13 +333,12 @@ impl<T: DiskDriver> RFS<T> {
         // prv!(inode);
 
         let mut blocks = vec![];
-        blocks.extend_from_slice(&inode.i_block);
         self.visit_blocks_inode(ino, 0, &mut |block, index| {
             debug!("dir walk to block {} index {}", block, index);
             if block != 0 {
+                blocks.push(block as u32);
                 Ok((false, false))
             } else {
-                blocks.push(block as u32);
                 Ok((true, false))
             }
         })?;
@@ -726,6 +725,127 @@ impl<T: DiskDriver> RFS<T> {
         Self::bitmap_set_value(bitmap, index, false);
     }
 
+    fn init_directory(&mut self, parent: usize, this_entry: &Ext2DirEntry) -> Result<Vec<Ext2DirEntry>> {
+        let mut entries = vec![];
+        let mut dir_this = this_entry.clone();
+        if dir_this.name[0] == u8::try_from('.')? && dir_this.name_len == 1 {
+            warn!("this entry is '.', ignore creating '.'");
+        } else {
+            dir_this.update_name(".");
+            entries.push(dir_this);
+        }
+        entries.push(Ext2DirEntry::new_dir("..", parent));
+        Ok(entries)
+    }
+
+    /// Write entries to disk, can skip blocks, entries should be formatted.
+    fn apply_directory_entries(&mut self, ino: usize, entries: &Vec<Ext2DirEntry>, block_offset: usize) -> Result<Vec<usize>> {
+        let total_size = entries.iter().map(|x| x.rec_len as usize).sum::<usize>();
+        let sz = self.block_size();
+        let total_blocks = total_size / sz + if total_size % sz == 0 { 0 } else { 1 };
+        let mut blocks = vec![];
+
+        self.visit_blocks_inode(ino, block_offset, &mut |block, index| {
+            let continues = (total_blocks + block_offset) > block;
+            debug!("apply dir walk to block {} index {}, continue={}", block, index, continues);
+            if block == 0 {
+                return Ok((continues, continues));
+            }
+            blocks.push(block);
+            Ok((continues, false))
+        })?;
+        let mut offset = 0 as usize;
+        let mut block_index = 0;
+        let mut buf = vec![0 as u8; sz];
+        for (i, e) in entries.iter().enumerate() {
+            let l = min(e.rec_len as usize, size_of::<Ext2DirEntry>());
+            buf[offset..(offset + l)].copy_from_slice(&unsafe {
+                serialize_row(e)
+            }[..l]);
+            if offset + e.rec_len as usize >= sz {
+                assert_eq!(offset + e.rec_len as usize, sz);
+                self.write_data_block(blocks[block_index], &buf)?;
+                buf.fill(0);
+                assert_eq!(buf.len(), sz);
+                block_index += 1;
+                offset = 0;
+                if block_index == blocks.len() {
+                    assert_eq!(i, entries.len() - 1);
+                    return Ok(blocks);
+                }
+            }
+        }
+        assert_eq!(offset, 0);
+        Ok(blocks)
+    }
+
+    /// Format entries, align to blocks
+    fn format_directory_entries(&mut self, entries: &mut Vec<Ext2DirEntry>) -> Result<()> {
+        let sz = self.block_size();
+        let mut offset = 0 as usize;
+        let entries_size = entries.len();
+        for i in 0..entries.len() {
+            if i < entries_size - 1 {
+                // if this entry can hold next entry, decrease rec_len
+                if entries[i].rec_len as usize - entries[i].name_len as usize - 8 >
+                    entries[i + 1].rec_len as usize {
+                    entries[i].update_rec_len();
+                }
+            }
+            let e = &mut entries[i];
+            if i == entries_size - 1 || offset + e.rec_len as usize >= sz {
+                // expand rec_len
+                e.rec_len = (sz - offset) as u16;
+                offset = 0;
+            } else {
+                offset += e.rec_len as usize;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn make_node2(&mut self, parent: usize, name: &str,
+                      mode: usize, node_type: Ext2FileType) -> Result<(usize, Ext2INode)> {
+        debug!("make_node(parent={}, name={})", parent, name);
+        let file_type: usize = node_type.clone().into();
+        let ino_free = if parent == 1 { EXT2_ROOT_INO } else { self.allocate_inode()? };
+        let mut entry = Ext2DirEntry::new(name, ino_free, file_type as u8);
+        entry.inode = ino_free as u32;
+
+        let mut inode = Ext2INode::default();
+        inode.i_mode = (mode & 0xFFF) as u16 | (file_type << 12) as u16;
+        if node_type == Ext2FileType::Directory {
+            let mut entries = self.init_directory(parent, &entry)?;
+            self.format_directory_entries(&mut entries)?;
+            let blocks = self.apply_directory_entries(parent, &entries, 0)?
+                .into_iter().map(|x| x as u32).collect::<Vec<u32>>();
+            let blocks_slice = &blocks[..(if blocks.len() < 15 { blocks.len() } else { 15 })];
+            inode.i_block[..blocks_slice.len()].copy_from_slice(blocks_slice);
+            inode.i_blocks = blocks.len() as u32;
+            inode.i_size = self.block_size() as u32;
+        } else if node_type == Ext2FileType::RegularFile {
+            inode.i_block[0] = self.allocate_block()? as u32;
+        } else {
+            panic!("unsupported type {:?}!", node_type);
+        }
+        if parent >= EXT2_ROOT_INO {
+            // update parent entries
+            let mut inode_parent = self.get_inode(parent as usize)?;
+            let mut entries_parent = self.get_dir_entries(parent)?;
+            entries_parent.push(entry);
+            self.format_directory_entries(&mut entries_parent)?;
+            let blocks = self.apply_directory_entries(parent, &entries_parent, 0)?
+                .into_iter().map(|x| x as u32).collect::<Vec<u32>>();
+            let blocks_slice = &blocks[..(if blocks.len() < 15 { blocks.len() } else { 15 })];
+            inode_parent.i_block[..blocks_slice.len()].copy_from_slice(blocks_slice);
+            inode_parent.i_blocks = blocks.len() as u32;
+            self.set_inode(parent, &inode_parent)?;
+        }
+        self.set_inode(ino_free, &inode)?;
+
+        Ok((ino_free, inode))
+    }
+
     pub fn make_node(&mut self, parent: usize, name: &str,
                      mode: usize, node_type: Ext2FileType) -> Result<(usize, Ext2INode)> {
         debug!("make_node(parent={}, name={})", parent, name);
@@ -836,8 +956,8 @@ impl<T: DiskDriver> RFS<T> {
         // TODO layer 1-3 support
         assert!(!(last_block_i == 12 || last_block_i == 13 || last_block_i == 14));
         // read parent dir
-        let mut parent_enties = self.get_block_dir_entries(inode_parent.i_block[last_block_i] as usize)?;
-        let mut entries_lengths: Vec<usize> = parent_enties.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
+        let mut parent_entries = self.get_block_dir_entries(inode_parent.i_block[last_block_i] as usize)?;
+        let mut entries_lengths: Vec<usize> = parent_entries.iter().map(|e| e.rec_len as usize).collect::<Vec<_>>();
         let mut offset_cnt = 0 as usize;
         let mut reset_last_rec_len = false;
         for (i, len) in entries_lengths.iter().enumerate() {
@@ -846,9 +966,9 @@ impl<T: DiskDriver> RFS<T> {
             } else {
                 // last entry may have a large rec_len
                 // calculate real size
-                if *len as i64 - (8 + parent_enties[i].name_len) as i64 >= entry.rec_len as i64 {
+                if *len as i64 - (8 + parent_entries[i].name_len) as i64 >= entry.rec_len as i64 {
                     reset_last_rec_len = true;
-                    offset_cnt += parent_enties[i].name_len as usize + 8;
+                    offset_cnt += parent_entries[i].name_len as usize + 8;
                 } else {
                     offset_cnt += len;
                 }
@@ -863,9 +983,9 @@ impl<T: DiskDriver> RFS<T> {
             let block_free = self.allocate_block()?;
             inode_parent.i_block[last_block_i] = block_free as u32;
             // reload parent_dir
-            let parent_enties_2 = self.get_block_dir_entries(block_free)?;
-            parent_enties = parent_enties_2;
-            entries_lengths = parent_enties.iter().map(|e| e.rec_len as usize).collect();
+            let parent_entries_2 = self.get_block_dir_entries(block_free)?;
+            parent_entries = parent_entries_2;
+            entries_lengths = parent_entries.iter().map(|e| e.rec_len as usize).collect();
             offset_cnt = 0;
             reset_last_rec_len = false;
             for len in entries_lengths { offset_cnt += len; }
@@ -878,8 +998,8 @@ impl<T: DiskDriver> RFS<T> {
         // show_hex_debug(&data_block[..0x50], 0x10);
         if reset_last_rec_len {
             debug!("write back modified parent entries");
-            let parent_entries_tail = parent_enties.len() - 1;
-            let mut parent_entries_last = parent_enties[parent_entries_tail].clone();
+            let parent_entries_tail = parent_entries.len() - 1;
+            let mut parent_entries_last = parent_entries[parent_entries_tail].clone();
             debug!("parent_entries_last: {}", parent_entries_last.to_string());
             let parent_entries_last_rec_len_old = parent_entries_last.rec_len as usize;
             let offset_start = self.block_size() - parent_entries_last_rec_len_old;
@@ -1000,7 +1120,10 @@ impl<T: DiskDriver> RFS<T> {
         let mut super_block = self.read_super_block()?;
         let format = FORCE_FORMAT.read().unwrap().clone();
         if !super_block.magic_matched() || format {
-            if !format { warn!("FileSystem not found! creating super block..."); } else { warn!("Will format disk!") }
+            if !format { warn!("FileSystem not found! creating super block..."); } else {
+                warn!("Will format disk!");
+                self.get_driver().ddriver_reset()?;
+            }
             let mkfs = MKFS_FORMAT.read().unwrap().clone();
             if mkfs {
                 // let's use mkfs.ext2
@@ -1162,7 +1285,8 @@ impl<T: DiskDriver> RFS<T> {
                         // let bitmap_data_clone = self.bitmap_inode.clone();
                         // self.write_data_block(inode_block_number, &bitmap_data_clone)?;
 
-                        self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
+                        // self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
+                        self.make_node2(1, ".", 0o755, Ext2FileType::Directory)?;
                         // self.make_node(EXT2_ROOT_INO, "lost+found", 0o755, Ext2FileType::Directory)?;
                         self.get_driver().ddriver_flush()?;
                     }
@@ -1445,9 +1569,12 @@ impl<T: DiskDriver> RFS<T> {
         let parent = RFS::<T>::shift_ino(parent);
         let entries = self.get_dir_entries(parent)?;
         let mut d = Ext2DirEntry::default();
-        for e in entries {
+        let mut index = 0;
+        let entries_size = entries.len();
+        for (i, e) in entries.into_iter().enumerate() {
             if e.get_name() == name {
                 d = e;
+                index = i;
                 break;
             }
         }
@@ -1470,7 +1597,11 @@ impl<T: DiskDriver> RFS<T> {
             }
             Self::bitmap_unset(&mut self.bitmap_inode, d.inode as usize);
             debug!("remove directory entry");
-
+            if index == entries_size {
+                // last entry
+            } else {
+                // just break the linked list
+            }
             Ok(())
         }
     }
