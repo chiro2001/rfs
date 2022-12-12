@@ -9,6 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub use disk_driver;
 use anyhow::{anyhow, Result};
 use disk_driver::{DiskDriver, DiskInfo, IOC_REQ_DEVICE_IO_SZ, IOC_REQ_DEVICE_SIZE, SeekType};
+use disk_driver::cache::int_log2;
 use execute::Execute;
 use log::*;
 use num::range_step;
@@ -1151,15 +1152,23 @@ impl<T: DiskDriver> RFS<T> {
     }
 
     pub fn rfs_write(&mut self, ino: u64, offset: i64, data: &[u8]) -> Result<u32> {
+        let sz = self.block_size();
         let size = data.len() as usize;
+        if offset as usize % sz != 0 {
+            debug!("unaligned write! offset=0x{:x}, len={}", offset, size);
+            let offset_aligned = down_align(offset as usize, int_log2(sz as u64) as usize);
+            let size_aligned = up_align(size, int_log2(sz as u64) as usize);
+            let mut data_read = self.rfs_read(ino, offset_aligned as i64, size_aligned as u32)?;
+            // let mut data_read = self.rfs_read(ino, offset_aligned as i64, size as u32)?;
+            data_read[(offset as usize - offset_aligned)..(size + offset as usize - offset_aligned)].copy_from_slice(data);
+            self.rfs_write(ino, offset_aligned as i64, &data_read)?;
+            return Ok(size as u32);
+        }
         debug!("#write: offset = {:x}, size = {:x}", offset, size);
         let mut offset = offset as usize;
         let base = offset;
-        let sz = self.block_size();
         let ino = RFS::<T>::shift_ino(ino as usize);
         let start_index = offset as usize / self.block_size();
-        // TODO: unaligned read write
-        assert_eq!(offset % self.block_size(), 0);
 
         let mut blocks: Vec<usize> = vec![];
 

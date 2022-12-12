@@ -241,6 +241,11 @@ pub fn up_align(value: usize, align_log: usize) -> usize {
     ((value >> align_log) + 1) << align_log
 }
 
+pub fn down_align(value: usize, align_log: usize) -> usize {
+    debug!("down_align(value={:x}, align_log={})", value, align_log);
+    (value >> align_log) << align_log
+}
+
 pub fn show_hex(data: &[u8], group_size: usize) {
     for (i, b) in data.iter().enumerate() {
         print!("{:02x} ", *b);
