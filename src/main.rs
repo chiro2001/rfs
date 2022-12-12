@@ -51,7 +51,7 @@ fn main() -> Result<()> {
     init_logs();
     let mountpoint = matches.get_one::<String>("mountpoint").unwrap();
     let device = matches.get_one::<String>("device").unwrap();
-    let layout = matches.get_one::<String>("device").unwrap();
+    let layout = matches.get_one::<String>("layout").unwrap();
     let path_mountpoint = fs::canonicalize(mountpoint)?;
     // let path_device = fs::canonicalize(device)?;
     let abspath_mountpoint = path_mountpoint.to_str().unwrap();
