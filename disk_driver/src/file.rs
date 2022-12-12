@@ -7,9 +7,9 @@ use log::*;
 use crate::*;
 
 /// 4MiB size
-const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400;
+// const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400;
 /// 1 GiB size
-// const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400 * 0x100;
+const FILE_DISK_SIZE: usize = 4 * 0x400 * 0x400 * 0x100;
 
 const FILE_DISK_UNIT: usize = 512;
 
