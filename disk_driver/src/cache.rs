@@ -39,4 +39,8 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
     fn ddriver_reset(&mut self) -> Result<()> {
         self.inner.ddriver_reset()
     }
+
+    fn ddriver_flush(&mut self) -> Result<()> {
+        self.inner.ddriver_flush()
+    }
 }

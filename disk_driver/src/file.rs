@@ -111,6 +111,11 @@ impl DiskDriver for FileDiskDriver {
         self.info = DiskInfo::default();
         Ok(())
     }
+
+    fn ddriver_flush(&mut self) -> Result<()> {
+        self.get_file().flush();
+        Ok(())
+    }
 }
 
 impl FileDiskDriver {

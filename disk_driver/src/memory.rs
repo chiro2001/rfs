@@ -75,6 +75,8 @@ impl DiskDriver for MemoryDiskDriver {
         self.pointer = 0;
         Ok(())
     }
+
+    fn ddriver_flush(&mut self) -> Result<()> { Ok(()) }
 }
 
 impl MemoryDiskDriver {

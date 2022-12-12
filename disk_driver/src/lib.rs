@@ -78,6 +78,8 @@ pub trait DiskDriver {
     fn ddriver_ioctl(&mut self, cmd: u32, arg: &mut [u8]) -> Result<()>;
     /// Reset cursor, fill super block
     fn ddriver_reset(&mut self) -> Result<()>;
+    /// Flush all
+    fn ddriver_flush(&mut self) -> Result<()>;
 }
 
 pub const IOC_REQ_DEVICE_SIZE: u32 = ((2 as u32) << (((0 + 8) + 8) + 14)) | (('A' as u32) << (0 + 8)) | ((0) << 0) | ((size_of::<u32>() as u32) << ((0 + 8) + 8));
