@@ -1277,4 +1277,9 @@ impl<T: DiskDriver> RFS<T> {
         self.apply_directory_entries(parent, &others, 0)?;
         Ok(())
     }
+
+    pub fn rfs_rmdir(&mut self, parent: usize, name: &str) -> Result<()> {
+        debug!("rmdir(parent={}, name={})", parent, name);
+        self.rfs_unlink(parent, name)
+    }
 }
