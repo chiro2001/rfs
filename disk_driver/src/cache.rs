@@ -1,3 +1,4 @@
+use std::collections::BinaryHeap;
 use std::num::NonZeroUsize;
 use anyhow::Result;
 use log::{debug, warn};
@@ -10,49 +11,73 @@ struct CacheDiskInfo {
     unit: u32,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialOrd, PartialEq, Ord, Eq)]
 struct CacheItem {
     dirty: bool,
     data: Vec<u8>,
 }
 
-struct MyLruCache {
-    size: usize,
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
+struct MyLruCacheEntry<K: Eq + Ord, V: Ord> {
+    key: K,
+    value: V,
 }
 
-impl MyLruCache {
+impl<K: Eq + Ord, V: Ord> MyLruCacheEntry<K, V> {
+    pub fn new(key: K, value: V) -> Self {
+        Self { key, value }
+    }
+}
+
+struct MyLruCache<K: Eq + Ord, V: Ord> {
+    size: usize,
+    data: BinaryHeap<MyLruCacheEntry<K, V>>,
+}
+
+impl<K: Eq + Ord, V: Ord> MyLruCache<K, V> {
     pub fn new(size: usize) -> Self {
-        Self { size }
+        Self { size, data: BinaryHeap::new() }
     }
 
-    pub fn push(&mut self, tag: u64, data: CacheItem) -> Option<(u64, CacheItem)> {
-        // None
-        Some((tag, data))
+    pub fn push(&mut self, tag: K, data: V) -> Option<(K, V)> {
+        let poped = if self.data.len() == self.size {
+            self.data.pop()
+        } else {
+            None
+        };
+        self.data.push(MyLruCacheEntry::new(tag, data));
+        match poped {
+            Some(e) => Some((e.key, e.value)),
+            None => None
+        }
     }
 
-    pub fn get<'a>(&mut self, tag: &u64) -> Option<&'a CacheItem> {
-        // &vec![0 as u8; 512]
+    pub fn get<'a, Q>(&mut self, tag: &K) -> Option<&'a V> {
+        // self.data.
+        // match self.data.peek() {
+        //     Some(e) => Some(&e.value),
+        //     None => None
+        // }
         None
     }
 
-    pub fn get_mut<'a>(&mut self, tag: &u64) -> Option<&'a mut CacheItem> {
-        // &mut vec![0 as u8; 512]
+    pub fn get_mut<'a, Q>(&'a mut self, k: &Q) -> Option<&'a mut V> {
         None
     }
 
     pub fn clear(&mut self) {}
 }
 
-impl Iterator for MyLruCache {
-    type Item = (u64, CacheItem);
+impl<K: Eq + Ord, V: Ord> Iterator for MyLruCache<K, V> {
+    type Item = (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
         None
     }
 }
 
-impl Iterator for &MyLruCache {
-    type Item = (u64, CacheItem);
+impl<K: Eq + Ord, V: Ord> Iterator for &MyLruCache<K, V> {
+    type Item = (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
         None
@@ -75,8 +100,8 @@ impl Iterator for &MyLruCache {
 pub struct CacheDiskDriver<T: DiskDriver> {
     inner: T,
     info: CacheDiskInfo,
-    // cache: LruCache<u64, CacheItem>,
-    cache: MyLruCache,
+    cache: LruCache<u64, CacheItem>,
+    // cache: MyLruCache<u64, CacheItem>,
     offset: i64,
     block_log: u64,
 }
@@ -113,8 +138,8 @@ impl<T: DiskDriver> CacheDiskDriver<T> {
         info.size = u32::from_le_bytes(buf.clone());
         let block_log = int_log2(unit as u64);
         assert_eq!(1 << block_log, unit);
-        // let cache = LruCache::new(NonZeroUsize::new(size).unwrap());
-        let cache = MyLruCache::new(size);
+        let cache = LruCache::new(NonZeroUsize::new(size).unwrap());
+        // let cache = MyLruCache::new(size);
         debug!("cache init, cache size: {}, disk size: {:x}, disk unit: {:x}; block_log: {}",
             size, info.size, info.unit, block_log);
         Self { inner, info, cache, offset: 0, block_log }
