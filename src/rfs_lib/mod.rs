@@ -1158,6 +1158,7 @@ impl<T: DiskDriver> RFS<T> {
         let sz = self.block_size();
         let ino = RFS::<T>::shift_ino(ino as usize);
         let start_index = offset as usize / self.block_size();
+        // TODO: unaligned read write
         assert_eq!(offset % self.block_size(), 0);
 
         let mut blocks: Vec<usize> = vec![];
