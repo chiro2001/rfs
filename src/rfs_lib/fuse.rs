@@ -2,7 +2,7 @@
 use std::ffi::OsStr;
 use std::time::SystemTime;
 use disk_driver::DiskDriver;
-use fuser::{Filesystem, KernelConfig, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow};
+use fuser::{Filesystem, KernelConfig, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow};
 use libc::{c_int, ENOENT};
 use log::*;
 use crate::rfs_lib::desc::Ext2FileType;
@@ -109,5 +109,14 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
             let _ = reply.add(d.inode as u64, (o + 1) as i64, inode.to_attr(d.inode as usize, self.block_size()).kind, d.get_name());
         }
         reply.ok();
+    }
+
+    fn create(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _umask: u32, _flags: i32, reply: ReplyCreate) {
+        prv!("create", parent, name, mode);
+        let parent = RFS::<T>::shift_ino(parent as usize);
+        rep!(reply, inode_info, self.make_node(parent, name.to_str().unwrap(), mode as usize, Ext2FileType::RegularFile));
+        let (ino, inode) = inode_info;
+        let attr = inode.to_attr(ino, self.block_size());
+        reply.created(&TTL, &attr, 0, 0, 0);
     }
 }
