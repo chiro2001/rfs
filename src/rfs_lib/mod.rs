@@ -1282,4 +1282,21 @@ impl<T: DiskDriver> RFS<T> {
         debug!("rmdir(parent={}, name={})", parent, name);
         self.rfs_unlink(parent, name)
     }
+
+    pub fn rfs_rename(&mut self, parent: usize, name: &str, newparent: usize, newname: &str) -> Result<()> {
+        let parent = RFS::<T>::shift_ino(parent);
+        let newparent = RFS::<T>::shift_ino(newparent);
+        let entries = self.get_dir_entries(parent)?;
+        let mut d = match entries.iter().find(|x| x.get_name() == name) {
+            None => return Err(anyhow!("No such of file {}!", name)),
+            Some(d) => d.clone(),
+        };
+        self.rfs_unlink(parent, name)?;
+        d.update_name(newname);
+        let mut entries_new = self.get_dir_entries(newparent)?;
+        entries_new.push(d);
+        self.format_directory_entries(&mut entries_new)?;
+        self.apply_directory_entries(newparent, &entries_new, 0)?;
+        Ok(())
+    }
 }
