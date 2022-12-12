@@ -772,8 +772,11 @@ impl Ext2SuperBlock {
     pub fn new(s_inodes_count: u32, s_blocks_count: u32, s_first_data_block: u32,
                s_log_block_size: u32) -> Self {
         Self {
-            s_inodes_count, s_blocks_count, s_first_data_block,
-            s_log_block_size, s_inodes_per_group: s_inodes_count,
+            s_inodes_count,
+            s_blocks_count,
+            s_first_data_block,
+            s_log_block_size,
+            s_inodes_per_group: s_inodes_count,
             ..Self::default()
         }
     }
@@ -798,13 +801,13 @@ pub struct FsLayoutArgs {
 impl From<FsLayoutArgs> for Ext2SuperBlock {
     fn from(l: FsLayoutArgs) -> Self {
         Self::new(l.inode_count as u32, l.block_count as u32,
-        if l.block_size < 2 * 0x400 { 1 } else { 0 },
-        match l.block_size {
-            1024 => 0,
-            2048 => 1,
-            4096 => 2,
-            _ => panic!("unsupported block size")
-        })
+                  if l.block_size < 2 * 0x400 { 1 } else { 0 },
+                  match l.block_size {
+                      1024 => 0,
+                      2048 => 1,
+                      4096 => 2,
+                      _ => panic!("unsupported block size")
+                  })
     }
 }
 
@@ -1039,6 +1042,18 @@ pub struct Ext2DirEntry {
     pub name: [u8; EXT2_NAME_LEN],
 }
 
+impl Default for Ext2DirEntry {
+    fn default() -> Self {
+        Self {
+            inode: 0,
+            rec_len: 0,
+            name_len: 0,
+            file_type: 0,
+            name: [0; EXT2_NAME_LEN],
+        }
+    }
+}
+
 pub const EXT2_DIR_ENTRY_BASE_SIZE: usize = size_of::<Ext2DirEntry>() - EXT2_NAME_LEN;
 
 impl Ext2DirEntry {
@@ -1051,7 +1066,7 @@ impl Ext2DirEntry {
     }
     fn name_len(&self) -> usize {
         for (i, v) in self.name.iter().enumerate() {
-            if *v == 0 { return i }
+            if *v == 0 { return i; }
         };
         return self.name.len();
     }

@@ -2,7 +2,7 @@
 use std::ffi::OsStr;
 use std::time::SystemTime;
 use disk_driver::DiskDriver;
-use fuser::{Filesystem, KernelConfig, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, ReplyWrite, Request, TimeOrNow};
+use fuser::{Filesystem, KernelConfig, ReplyAttr, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow};
 use libc::{c_int, ENOENT};
 use log::*;
 use crate::rfs_lib::desc::Ext2FileType;
@@ -65,6 +65,10 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
         let attr = inode.to_attr(ino, self.block_size());
         reply.entry(&TTL, &attr, 0);
         debug!("mkdir done");
+    }
+
+    fn unlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEmpty) {
+        todo!()
     }
 
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32,

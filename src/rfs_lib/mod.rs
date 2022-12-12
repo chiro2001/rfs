@@ -708,11 +708,23 @@ impl<T: DiskDriver> RFS<T> {
         Err(anyhow!("Bitmap full!"))
     }
 
-    pub fn bitmap_set(bitmap: &mut [u8], index: usize) {
-        debug!("setting bitmap for index {}", index);
+    pub fn bitmap_set_value(bitmap: &mut [u8], index: usize, set: bool) {
+        debug!("changing bitmap for index {}, set={}", index, set);
         let index = if index == 0 { 0 } else { index - 1 };
-        let b = bitmap[index / 8] | (1 << (index % 8));
+        let b = if set {
+            bitmap[index / 8] | (1 << (index % 8))
+        } else {
+            bitmap[index / 8] & (!(1 << (index % 8)))
+        };
         bitmap[index / 8] = b;
+    }
+
+    pub fn bitmap_set(bitmap: &mut [u8], index: usize) {
+        Self::bitmap_set_value(bitmap, index, true);
+    }
+
+    pub fn bitmap_unset(bitmap: &mut [u8], index: usize) {
+        Self::bitmap_set_value(bitmap, index, false);
     }
 
     pub fn make_node(&mut self, parent: usize, name: &str,
@@ -1427,5 +1439,40 @@ impl<T: DiskDriver> RFS<T> {
         debug!("flush disk");
         self.driver.ddriver_flush()?;
         Ok(())
+    }
+
+    /// Remove a file
+    pub fn rfs_unlink(&mut self, parent: usize, name: &str) -> Result<()> {
+        let parent = RFS::<T>::shift_ino(parent);
+        let entries = self.get_dir_entries(parent)?;
+        let mut d = Ext2DirEntry::default();
+        for e in entries {
+            if e.get_name() == name {
+                d = e;
+                break;
+            }
+        }
+        if d.inode == 0 {
+            Err(anyhow!("No such file"))
+        } else {
+            debug!("get file inode");
+            let inode = self.get_inode(d.inode as usize)?;
+            debug!("unset bitmaps");
+            let mut remove_blocks = vec![];
+            self.visit_blocks_inode(d.inode as usize, 0, &mut |block, index| {
+                debug!("remove walk to block {} index {}", block, index);
+                if block != 0 {
+                    remove_blocks.push(block);
+                }
+                Ok((block != 0, false))
+            })?;
+            for b in remove_blocks {
+                Self::bitmap_unset(&mut self.bitmap_data, b);
+            }
+            Self::bitmap_unset(&mut self.bitmap_inode, d.inode as usize);
+            debug!("remove directory entry");
+
+            Ok(())
+        }
     }
 }
