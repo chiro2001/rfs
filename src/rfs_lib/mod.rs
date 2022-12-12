@@ -24,7 +24,7 @@ pub mod fuse;
 use utils::*;
 use mem::*;
 use desc::*;
-use crate::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, prv};
+use crate::{DEVICE_FILE, FORCE_FORMAT, LAYOUT_FILE, MKFS_FORMAT, prv};
 
 /// Data TTL, 1 second default
 const TTL: Duration = Duration::from_secs(1);
@@ -1028,8 +1028,9 @@ impl<T: DiskDriver> RFS<T> {
                 let default_layout_str = "
 | BSIZE = 1024 B |
 | Boot(1) | Super(1) | GroupDesc(1) | DATA Map(1) | Inode Map(1) | Inode Table(128) | DATA(*) |";
-                debug!("loading fs.layout...");
-                let path = Path::new("include/fs.layout");
+                let layout_file = LAYOUT_FILE.read().unwrap().clone();
+                debug!("loading {}...", layout_file);
+                let path = Path::new(&layout_file);
                 let mut layout_string = default_layout_str.to_string();
                 if path.exists() {
                     let mut file = File::open(path).unwrap();
@@ -1037,7 +1038,7 @@ impl<T: DiskDriver> RFS<T> {
                     file.read_to_end(&mut data).unwrap();
                     layout_string = String::from_utf8(data).unwrap();
                 } else {
-                    warn!("fs.layout({}) not found! use default layout: {}", path.to_str().unwrap(), default_layout_str);
+                    warn!("{}({}) not found! use default layout: {}", layout_file, path.to_str().unwrap(), default_layout_str);
                 }
                 let lines = layout_string.lines();
                 let mut layout = FsLayoutArgs::default();

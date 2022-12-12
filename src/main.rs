@@ -12,7 +12,7 @@ use nix::sys::signal;
 use retry::delay::Fixed;
 use retry::{OperationResult, retry_with_index};
 use log::*;
-use rfs::{DEVICE_FILE, FORCE_FORMAT, MKFS_FORMAT, MOUNT_POINT, RFS};
+use rfs::{DEVICE_FILE, FORCE_FORMAT, LAYOUT_FILE, MKFS_FORMAT, MOUNT_POINT, RFS};
 use crate::rfs_lib::utils::init_logs;
 
 mod rfs_lib;
@@ -38,6 +38,11 @@ fn main() -> Result<()> {
                 .required(false)
                 .default_value("ddriver"),
         )
+        .arg(
+            arg!(-l --layout <FILE> "Select layout file for formatting disk")
+                .required(false)
+                .default_value("include/fs.layout"),
+        )
         .get_matches();
 
     if matches.get_flag("verbose") {
@@ -46,12 +51,14 @@ fn main() -> Result<()> {
     init_logs();
     let mountpoint = matches.get_one::<String>("mountpoint").unwrap();
     let device = matches.get_one::<String>("device").unwrap();
+    let layout = matches.get_one::<String>("device").unwrap();
     let path_mountpoint = fs::canonicalize(mountpoint)?;
     // let path_device = fs::canonicalize(device)?;
     let abspath_mountpoint = path_mountpoint.to_str().unwrap();
     // let abspath_device = path_device.to_str().unwrap();
     info!("Device: {}", device);
     DEVICE_FILE.set(device.clone()).unwrap();
+    LAYOUT_FILE.set(layout.clone()).unwrap();
 
     MOUNT_POINT.set(abspath_mountpoint.clone().to_string()).unwrap();
     FORCE_FORMAT.set(matches.get_flag("format")).unwrap();
