@@ -344,7 +344,7 @@ impl<T: DiskDriver> RFS<T> {
         })?;
 
         // layer 1-3 directory entries supporting
-        Ok(blocks.iter().take(12)
+        Ok(blocks.iter()
             .map(|b| match self.get_block_dir_entries(*b as usize) {
                 Ok(e) => e,
                 Err(_) => vec![]
@@ -690,7 +690,8 @@ impl<T: DiskDriver> RFS<T> {
         // if ino == 1 { 0 } else { ino as usize }
         // (ino + 1) as usize
         // used for version 0
-        ino as usize
+        // ino as usize
+        if ino == 0 { 1 } else { if ino == 1 { EXT2_ROOT_INO } else { ino } }
     }
 
     pub fn bitmap_search(bitmap: &[u8], reserved: usize) -> Result<usize> {
@@ -728,12 +729,12 @@ impl<T: DiskDriver> RFS<T> {
     fn init_directory(&mut self, parent: usize, this_entry: &Ext2DirEntry) -> Result<Vec<Ext2DirEntry>> {
         let mut entries = vec![];
         let mut dir_this = this_entry.clone();
-        if dir_this.name[0] == u8::try_from('.')? && dir_this.name_len == 1 {
-            warn!("this entry is '.', ignore creating '.'");
-        } else {
-            dir_this.update_name(".");
-            entries.push(dir_this);
-        }
+        // if dir_this.name[0] == u8::try_from('.')? && dir_this.name_len == 1 {
+        //     warn!("this entry is '.', ignore creating '.'");
+        // } else {
+        dir_this.update_name(".");
+        entries.push(dir_this);
+        // }
         entries.push(Ext2DirEntry::new_dir("..", parent));
         Ok(entries)
     }
@@ -773,6 +774,8 @@ impl<T: DiskDriver> RFS<T> {
                     assert_eq!(i, entries.len() - 1);
                     return Ok(blocks);
                 }
+            } else {
+                offset += e.rec_len as usize;
             }
         }
         assert_eq!(offset, 0);
@@ -806,7 +809,7 @@ impl<T: DiskDriver> RFS<T> {
 
     pub fn make_node2(&mut self, parent: usize, name: &str,
                       mode: usize, node_type: Ext2FileType) -> Result<(usize, Ext2INode)> {
-        debug!("make_node(parent={}, name={})", parent, name);
+        debug!("make_node2(parent={}, name={})", parent, name);
         let file_type: usize = node_type.clone().into();
         let ino_free = if parent == 1 { EXT2_ROOT_INO } else { self.allocate_inode()? };
         let mut entry = Ext2DirEntry::new(name, ino_free, file_type as u8);
@@ -817,7 +820,7 @@ impl<T: DiskDriver> RFS<T> {
         if node_type == Ext2FileType::Directory {
             let mut entries = self.init_directory(parent, &entry)?;
             self.format_directory_entries(&mut entries)?;
-            let blocks = self.apply_directory_entries(parent, &entries, 0)?
+            let blocks = self.apply_directory_entries(ino_free, &entries, 0)?
                 .into_iter().map(|x| x as u32).collect::<Vec<u32>>();
             let blocks_slice = &blocks[..(if blocks.len() < 15 { blocks.len() } else { 15 })];
             inode.i_block[..blocks_slice.len()].copy_from_slice(blocks_slice);

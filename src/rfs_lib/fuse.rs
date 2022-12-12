@@ -51,7 +51,8 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
 
     fn mknod(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _umask: u32, _rdev: u32, reply: ReplyEntry) {
         prv!("mknod", parent, name, mode);
-        rep!(reply, inode_info, self.make_node(parent as usize, name.to_str().unwrap(), mode as usize, Ext2FileType::RegularFile));
+        let parent = RFS::<T>::shift_ino(parent as usize);
+        rep!(reply, inode_info, self.make_node2(parent, name.to_str().unwrap(), mode as usize, Ext2FileType::RegularFile));
         let (ino, inode) = inode_info;
         let attr = inode.to_attr(ino, self.block_size());
         reply.entry(&TTL, &attr, 0);
@@ -60,7 +61,8 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
 
     fn mkdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _umask: u32, reply: ReplyEntry) {
         prv!("mkdir", parent, name, mode);
-        rep!(reply, inode_info, self.make_node(parent as usize, name.to_str().unwrap(), mode as usize, Ext2FileType::Directory));
+        let parent = RFS::<T>::shift_ino(parent as usize);
+        rep!(reply, inode_info, self.make_node2(parent, name.to_str().unwrap(), mode as usize, Ext2FileType::Directory));
         let (ino, inode) = inode_info;
         let attr = inode.to_attr(ino, self.block_size());
         reply.entry(&TTL, &attr, 0);
