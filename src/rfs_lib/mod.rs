@@ -376,108 +376,6 @@ impl<T: DiskDriver> RFS<T> {
         }
     }
 
-    /// Walk on *ONE* Layer
-    #[allow(dead_code)]
-    pub fn walk_blocks<const L: usize, F>(&mut self, start_block: usize, block_index: usize, s: usize, mut f: &mut F) -> Result<bool>
-        where F: FnMut(usize, usize) -> Result<bool> {
-        debug!("walk_blocks<{}>(start_block={}, block_index={})", L, start_block, block_index);
-        if start_block == 0 {
-            debug!("start_block is zero!");
-            return Ok(false);
-        }
-        // m = log2(block_size / 4) = log2(layer), x / a == x >> m
-        let m = self.super_block.s_log_block_size as usize + 10 - 2;
-        let layer_size = self.block_size() / 4;
-        // let layer_size_mask = (layer_size * 4) - 1;
-        let mut data_block = self.create_block_vec();
-        let mut buf_u32 = [0 as u8; 4];
-        self.read_data_block(start_block, &mut data_block)?;
-        // for i in block_index..(self.threshold_diff(L) + target_offset) {
-        // for i in block_index..(block_index + self.threshold_diff(L)) {
-        assert_eq!(self.threshold_diff(L) / (1 << (m * (s - 1))), layer_size);
-        // let entry_index_start = (block_index - 12) >> ((s - 1) * m);
-        let entry_index_start = self.threshold(L - 1);
-        for i in range_step(entry_index_start, self.threshold(L + 1), 1 << (m * (s - 1))) {
-            // for i in entry_index_start..((entry_index_start + layer_size) % layer_size) {
-            // let o = ((i - self.threshold(L - 1)) >> (2 * (L - 1))) & layer_size_mask;
-            // let x = i - 12;
-            // let o = ((x << 2) >> ((s - 1) * m)) & layer_size_mask;
-            // prv!(i, m, o);
-            let o = i * 4;
-            buf_u32.copy_from_slice(&data_block[o..o + 4]);
-            let block = u32::from_be_bytes(buf_u32.clone()) as usize;
-            // debug!("buf_u32: {:x?}, block: {:x}", buf_u32, block);
-            if L != 1 {
-                if L == 3 {
-                    // if !self.walk_blocks::<2, F>(block, i, s + 1, &mut f)? {
-                    if !self.walk_blocks::<2, F>(block, (i >> ((s - 1) * m)) + 12, s + 1, &mut f)? {
-                        debug!("quit <2> on i={}", i);
-                        return Ok(false);
-                    };
-                }
-                if L == 2 {
-                    // if !self.walk_blocks::<1, F>(block, i, s + 1, &mut f)? {
-                    if !self.walk_blocks::<1, F>(block, (i >> ((s - 1) * m)) + 12, s + 1, &mut f)? {
-                        debug!("quit <1> on i={}", i);
-                        debug!("thresholds: 0={} 1={} 2={} 3={}", self.threshold(0),
-                            self.threshold(1), self.threshold(2), self.threshold(3));
-                        return Ok(false);
-                    };
-                }
-            } else {
-                debug!("call f(block={}, index={})", block, i);
-                let r = f(block, i)?;
-                if !r { return Ok(r); }
-            }
-        }
-        Ok(true)
-    }
-
-    /// Walk for ino
-    #[allow(dead_code)]
-    pub fn walk_blocks_inode<F>(&mut self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
-        where F: FnMut(usize, usize) -> Result<bool> {
-        let inode = self.get_inode(ino)?;
-        macro_rules! visit_layer {
-            ($l:expr) => {
-                visit_layer_from!($l, self.threshold($l - 1));
-            };
-        }
-        macro_rules! visit_layer_from {
-            ($l:expr, $start:expr) => {
-                if !self.walk_blocks::<$l, F>(inode.i_block[11 + $l] as usize, $start, 1, f)? { return Ok(()); };
-            };
-        }
-        debug!("i_blocks[12, 13, 14] = {}, {}, {}", inode.i_block[12], inode.i_block[13], inode.i_block[14]);
-        // if block_index < self.threshold(0) {
-        for i in block_index..self.threshold(0) {
-            if inode.i_block[i] == 0 || !f(inode.i_block[i] as usize, i)? { return Ok(()); }
-        }
-        // continue
-        visit_layer!(1);
-        visit_layer!(2);
-        // panic!("L3");
-        visit_layer!(3);
-        // } else if block_index < self.threshold(1) {
-        //     // debug!("START from layer 1");
-        //     visit_layer_from!(1, block_index);
-        //     visit_layer!(2);
-        //     visit_layer!(3);
-        // } else if block_index < self.threshold(2) {
-        //     error!("START from layer 2");
-        //     // visit_layer_from!(2, block_index);
-        //     visit_layer!(2);
-        //     visit_layer!(3);
-        // } else if block_index < self.threshold(3) {
-        //     error!("START from layer 3");
-        //     // visit_layer_from!(3, block_index);
-        //     visit_layer!(3);
-        // } else {
-        //     return Err(anyhow!("Too big block_index!"));
-        // }
-        Ok(())
-    }
-
     pub fn visit_blocks_inode<F>(&mut self, ino: usize, block_index: usize, f: &mut F) -> Result<()>
         where F: FnMut(usize, usize) -> Result<(bool, bool)> {
         let mut inode = self.get_inode(ino)?;
@@ -686,9 +584,6 @@ impl<T: DiskDriver> RFS<T> {
     /// reserved for compatibility
     // pub fn shift_ino(ino: u64) -> usize {
     pub fn shift_ino(ino: usize) -> usize {
-        // if ino == 1 { EXT2_ROOT_INO } else { ino as usize }
-        // if ino == 1 { 0 } else { ino as usize }
-        // (ino + 1) as usize
         // used for version 0
         // ino as usize
         if ino == 0 { 1 } else { if ino == 1 { EXT2_ROOT_INO } else { ino } }
@@ -729,12 +624,8 @@ impl<T: DiskDriver> RFS<T> {
     fn init_directory(&mut self, parent: usize, this_entry: &Ext2DirEntry) -> Result<Vec<Ext2DirEntry>> {
         let mut entries = vec![];
         let mut dir_this = this_entry.clone();
-        // if dir_this.name[0] == u8::try_from('.')? && dir_this.name_len == 1 {
-        //     warn!("this entry is '.', ignore creating '.'");
-        // } else {
         dir_this.update_name(".");
         entries.push(dir_this);
-        // }
         entries.push(Ext2DirEntry::new_dir("..", parent));
         Ok(entries)
     }
@@ -1077,18 +968,9 @@ impl<T: DiskDriver> RFS<T> {
                         self.bitmap_inode.extend_from_slice(&bitmap_inode);
 
                         // create root directory
-                        // self.make_node(1, "..", 0o755, Ext2FileType::Directory)?;
-                        // self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
-
-                        // debug!("setting inode bit for root directory");
-                        // RFS::<T>::bitmap_set(&mut self.bitmap_inode, EXT2_ROOT_INO);
-                        // let inode_block_number = self.get_group_desc().bg_inode_bitmap as usize;
-                        // let bitmap_data_clone = self.bitmap_inode.clone();
-                        // self.write_data_block(inode_block_number, &bitmap_data_clone)?;
-
-                        // self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
                         self.make_node(1, ".", 0o755, Ext2FileType::Directory)?;
                         // self.make_node(EXT2_ROOT_INO, "lost+found", 0o755, Ext2FileType::Directory)?;
+                        debug!("dump all, reload fs");
                         self.rfs_dump()?;
                         self.get_driver().ddriver_flush()?;
                     }
