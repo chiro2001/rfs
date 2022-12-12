@@ -21,6 +21,7 @@ pub mod desc;
 pub mod types;
 pub mod mem;
 pub mod fuse;
+pub mod xattr;
 
 use utils::*;
 use mem::*;

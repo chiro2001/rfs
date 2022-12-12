@@ -127,6 +127,10 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
         reply.ok();
     }
 
+    // fn setxattr(&mut self, _req: &Request<'_>, ino: u64, name: &OsStr, _value: &[u8], flags: i32, position: u32, reply: ReplyEmpty) {
+    //     todo!()
+    // }
+
     fn access(&mut self, _req: &Request<'_>, ino: u64, _mask: i32, reply: ReplyEmpty) {
         let ino = RFS::<T>::shift_ino(ino as usize);
         rep!(reply, self.get_inode(ino));
