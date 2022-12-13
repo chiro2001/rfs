@@ -118,3 +118,10 @@ Test loop: 100, Cache Blks: 0
      Running `target/release/rfs --format -q --latency /home/chiro/mnt`
 Time: 9035.56513786316ms BW: 0.08646387780728894MB/s
 ```
+
+与 fuse-ext2 比较：
+
+```
+fuse-ext2 Test loop: 1000000
+Time: 10209.16724205017ms BW: 765.2436104505542MB/s
+```
