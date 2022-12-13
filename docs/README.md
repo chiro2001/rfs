@@ -101,6 +101,51 @@ mkfs.ext2 ~/ddriver -t ext2 -r 0
 
 经测试其和本项目中的文件系统是兼容的。不过因为其会占用部分保留 inode 和 data block，而且会生成 `lost+found`，故测试时还需要使用程序内的格式化逻辑。
 
+除了测试中使用的 4 MiB 大小的文件系统，我们可以这样创建 1GiB 大小的文件系统：
+
+```bash
+$ cargo run --release --package rfs -- -f /home/chiro/mnt --format -c --cache_size 128 -l include/fs-1GiB.layout -s 1024  
+    Finished release [optimized] target(s) in 0.07s
+     Running `target/release/rfs -f /home/chiro/mnt --format -c --cache_size 128 -l include/fs-1GiB.layout -s 1024`
+[2022-12-13T08:55:50Z INFO  rfs] Device: ddriver
+[2022-12-13T08:55:50Z INFO  rfs] [try 1/3] Mount to /home/chiro/mnt
+[2022-12-13T08:55:50Z WARN  disk_driver::file] FileDiskDriver new, path=, size=0x40000000, iosz=512
+[2022-12-13T08:55:50Z INFO  fuser::session] Mounting /home/chiro/mnt
+[2022-12-13T08:55:50Z INFO  disk_driver::file] FileDrv open: ddriver
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] disk layout size: 1073741824
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] disk unit size: 512
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] Disk ddriver has 2097152 IO blocks.
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] disk info: DiskInfo { stats: DiskStats { write_cnt: 0, read_cnt: 0, seek_cnt: 0 }, consts: DiskConst { read_lat: 2, write_lat: 1, seek_lat: 4, track_num: 0, major_num: 100, layout_size: 1073741824, iounit_size: 512 } }
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] super block size 2 disk block (1024 bytes)
+[2022-12-13T08:55:52Z WARN  rfs::rfs_lib] Will format disk!
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] block_size = 4096
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] read fs.layout: FsLayoutArgs {
+        block_count: 262144,
+        block_size: 4096,
+        boot: true,
+        super_block: 1,
+        group_desc: 2,
+        data_map: 3,
+        inode_map: 4,
+        inode_table: 5,
+        inode_count: 65536,
+    }
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] super block size 2 disk block (1024 bytes)
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] fs stats: EXT2 65536 inodes, 4 KiB per block, free inodes 1013, free blocks 3806
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] fs layout:
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] | BSIZE = 4096 B |
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] | Boot(1) | Super(1) | GroupDesc(1) | DATA Map(1) | Inode Map(1) | Inode Table(2048) | DATA(*) |
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] For inode bitmap, see @ 4000
+[2022-12-13T08:55:52Z INFO  rfs::rfs_lib] For  data bitmap, see @ 3000
+```
+
+其布局结构为：
+
+```
+| BSIZE = 4096 B |
+| Boot(1) | Super(1) | GroupDesc(1) | DATA Map(1) | Inode Map(1) | Inode Table(2048) | DATA(*) |
+```
+
 ### 缓存设计
 
 关闭模拟磁盘延迟：
@@ -135,3 +180,66 @@ Time: 9035.56513786316ms BW: 0.08646387780728894MB/s
 fuse-ext2 Test loop: 1000000
 Time: 10209.16724205017ms BW: 765.2436104505542MB/s
 ```
+
+## 实验结果
+
+运行所有测试的结果：
+
+```bash
+$ ./test.sh
+开始mount, mkdir, touch, ls, read&write, cp, umount测试测试脚本工程根目录: /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests
+测试用例: /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/stages/mount.sh
+测试用例: /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/stages/mkdir.sh
+测试用例: /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/stages/touch.sh
+测试用例: /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/stages/ls.sh
+测试用例: /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/stages/remount.sh
+测试用例: /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/stages/rw.sh
+测试用例: /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/stages/cp.sh
+============================================================================================================================    Finished dev [unoptimized + debuginfo] target(s) in 0.05s
+     Running `/home/chiro/os/fuse-ext2/fs/rfs/rfs/target/debug/rfs --device=/home/chiro/ddriver -q /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt`
+pass: case 1 - mount
+============================================================================================================================pass: case 2.1 - mkdir /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/dir0
+pass: case 2.2 - mkdir /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/dir0/dir0
+pass: case 2.3 - mkdir /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/dir0/dir0/dir0
+pass: case 2.4 - mkdir /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/dir1
+============================================================================================================================pass: case 3.1 - touch /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/file0
+pass: case 3.2 - touch /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/file1
+pass: case 3.3 - touch /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/dir0/file1
+pass: case 3.4 - touch /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/dir0/file2
+pass: case 3.5 - touch /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/dir1/file3
+============================================================================================================================pass: case 4.1 - ls /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/
+pass: case 4.2 - ls /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/dir0
+pass: case 4.3 - ls /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/dir0/dir1
+pass: case 4.4 - ls /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/dir0/dir1/dir2
+============================================================================================================================    Finished dev [unoptimized + debuginfo] target(s) in 0.05s
+     Running `/home/chiro/os/fuse-ext2/fs/rfs/rfs/target/debug/rfs --device=/home/chiro/ddriver -q /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt`
+pass: case 5.1 - umount /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt
+pass: case 5.2 - check bitmap
+============================================================================================================================    Finished dev [unoptimized + debuginfo] target(s) in 0.06s
+     Running `/home/chiro/os/fuse-ext2/fs/rfs/rfs/target/debug/rfs --device=/home/chiro/ddriver -q /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt`
+pass: case 6.1 - write /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/file0
+pass: case 6.2 - read /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/file0
+============================================================================================================================pass: case 7.1 - prepare content of /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/file9
+pass: case 7.2 - copy /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/file9 to /home/chiro/os/fuse-ext2/fs/rfs/rfs/tests/mnt/file10
+============================================================================================================================ 
+Score: 34/34
+pass: 恭喜你，通过所有测试 (34/34)
+$ 
+```
+
+挂载 1GiB 文件系统并打开 512 磁盘块大小的缓存，继续测试。
+
+连续写入性能：
+
+```bash
+$ dd if=/dev/random of=mnt/random bs=1MiB count=64
+输入了 64+0 块记录输出了 64+0 块记录67108864 字节 (67 MB, 64 MiB) 已复制，5.88972 s，11.4 MB/s
+```
+
+连续读取性能：
+
+```bash
+$ dd of=/dev/null if=mnt/random bs=1MiB count=64
+输入了 64+0 块记录输出了 64+0 块记录67108864 字节 (67 MB, 64 MiB) 已复制，0.635838 s，106 MB/s
+```
+

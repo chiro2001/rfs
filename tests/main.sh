@@ -96,7 +96,7 @@ function fail() {
 
 # Utils
 function mount_fuse() {
-    cargo run -- --device="$HOME"/ddriver "${MNTPOINT}"
+    cargo run -- --device="$HOME"/ddriver -q "${MNTPOINT}"
     sleep 1
 }
 

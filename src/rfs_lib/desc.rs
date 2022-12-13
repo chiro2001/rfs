@@ -800,14 +800,20 @@ pub struct FsLayoutArgs {
 
 impl From<FsLayoutArgs> for Ext2SuperBlock {
     fn from(l: FsLayoutArgs) -> Self {
-        Self::new(l.inode_count as u32, l.block_count as u32,
-                  if l.block_size < 2 * 0x400 { 1 } else { 0 },
-                  match l.block_size {
-                      1024 => 0,
-                      2048 => 1,
-                      4096 => 2,
-                      _ => panic!("unsupported block size")
-                  })
+        let mut r =
+            Self::new(l.inode_count as u32, l.block_count as u32,
+                      if l.block_size < 2 * 0x400 { 1 } else { 0 },
+                      match l.block_size {
+                          1024 => 0,
+                          2048 => 1,
+                          4096 => 2,
+                          _ => panic!("unsupported block size")
+                      });
+        r.s_free_blocks_count = (l.block_count - 1 - 1 - 1 - 1) as u32;
+        r.s_free_inodes_count = (l.inode_count -
+            (1 + 1 + 1 + 1 + 1 + l.inode_count / size_of::<Ext2INode>() + 1)
+        ) as u32;
+        r
     }
 }
 
