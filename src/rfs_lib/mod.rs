@@ -222,7 +222,7 @@ impl<T: DiskDriver> RFS<T> {
     pub fn print_stats(&self) {
         info!("fs stats: {}", self.super_block.to_string());
         info!("fs layout:");
-        println!("| BSIZE = {} B |", self.block_size());
+        info!("| BSIZE = {} B |", self.block_size());
         let mut block_layout: Vec<String> = vec![];
         block_layout.push("Boot(1)".to_string());
         block_layout.push("Super(1)".to_string());
@@ -232,7 +232,7 @@ impl<T: DiskDriver> RFS<T> {
         block_layout.push(format!("Inode Table({})", self.super_block.s_inodes_count as usize
             / (self.block_size() / size_of::<Ext2INode>())));
         block_layout.push("DATA(*)".to_string());
-        println!("| {} |", block_layout.join(" | "));
+        info!("| {} |", block_layout.join(" | "));
         info!("For inode bitmap, see @ {:x}", self.get_group_desc().bg_inode_bitmap as usize * self.block_size());
         info!("For  data bitmap, see @ {:x}", self.get_group_desc().bg_block_bitmap as usize * self.block_size());
     }

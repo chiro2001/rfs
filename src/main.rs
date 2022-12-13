@@ -42,6 +42,8 @@ fn main() -> Result<()> {
             .required(false))
         .arg(arg!(-v --verbose "Print more debug information, or set `RUST_LOG=debug`").action(ArgAction::SetTrue)
             .required(false))
+        .arg(arg!(-q --quiet "Do not print logs").action(ArgAction::SetTrue)
+            .required(false))
         .arg(
             arg!(-d --device <FILE> "Device path (filesystem storage file)")
                 .required(false)
@@ -69,7 +71,9 @@ fn main() -> Result<()> {
     if matches.get_flag("verbose") {
         set_var("RUST_LOG", "debug");
     }
-    init_logs();
+    if !matches.get_flag("quiet") {
+        init_logs();
+    }
     let mountpoint = matches.get_one::<String>("mountpoint").unwrap();
     let device = matches.get_one::<String>("device").unwrap();
     let layout = matches.get_one::<String>("layout").unwrap();
