@@ -6,9 +6,19 @@
 
 在本实验中，本项目完成了一个基于 Rust 语言和 [fuse-rs](https://github.com/chiro2001/fuse-rs) 框架的兼容 Ext2 rev 0.0 大部分功能的用户文件系统。
 
+### 实现的功能
+
+1. 文件/文件夹的创建、读写、删除
+2. 时间戳的查询和更新
+3. 大文件支持
+4. 创建文件系统，文件系统格式化
+5. 文件系统缓存
+
+经测试，大部分软件可以在此文件系统上运行，如 VsCode、GCC 等。
+
 ## 源代码结构
 
-本项目由两个 git 仓库组成，仓库 [rfs](https://github.com/chiro2001/rfs) 是 仓库 [fuse-ext2](https://github.com/chiro2001/fuse-ext2) 的子项目。
+本项目由两个 git 仓库组成，仓库 [rfs](https://github.com/chiro2001/rfs) 是 仓库 [fuse-extfs](https://github.com/chiro2001/fuse-extfs) 的子项目。fuse-extfs 属于 HITsz 操作系统实验 5 框架，rfs 可以通过静态链接的方式在 fuse-extfs 内运行。
 
 项目中有四个 Rust crate：
 
@@ -26,8 +36,8 @@
 4. `rfs`，即 `rfs` repo 自身
    1. 是文件系统的主要逻辑
    2. 通过 `trait DiskDriver` 实现编译期多态
-   3. 其同时可编译成静态库 `rfs_lib` 和可执行文件 `rfs_run`
-   4. 编译成可执行文件 `rfs_run` 时不需要依赖原项目框架的 `ddriver`，是可以独立运行的
+   3. 其同时可编译成静态库 `rfs_lib` 和可执行文件 `rfs`
+   4. 编译成可执行文件 `rfs` 时不需要依赖原项目框架的 `ddriver`，是可以独立运行的
 
 原框架中的项目链接了静态库 `rfs_bind_lib`，所以 `rfs.cpp` 中不含有文件系统逻辑，仅含有向 Rust 端的函数调用。
 
@@ -119,7 +129,7 @@ Test loop: 100, Cache Blks: 0
 Time: 9035.56513786316ms BW: 0.08646387780728894MB/s
 ```
 
-与 fuse-ext2 比较：
+[fuse-ext2](https://github.com/alperakcan/fuse-ext2) 是一个多操作系统 FUSE 模块，用于挂载 ext2、ext3 和 ext4 文件系统设备和/或具有读写支持的镜像文件。其经过了 8 年的开发，并有 30 位贡献者。与 fuse-ext2 进行性能比较：
 
 ```
 fuse-ext2 Test loop: 1000000

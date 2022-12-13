@@ -27,14 +27,21 @@ Arguments:
   [mountpoint]  Optional mountpoint to mount on [default: tests/mnt]
 
 Options:
-  -f, --front          Keep daemon running in front
-      --format         Format disk
-      --mkfs           Use mkfs.ext2 to format disk
-  -r, --read_only      Mount as read only filesystem
-  -v, --verbose        Print more debug information, or set `RUST_LOG=debug`
-  -d, --device <FILE>  Device path (filesystem storage file) [default: ddriver]
-  -h, --help           Print help information
-  -V, --version        Print version information
+  -f, --front                    Keep daemon running in front
+      --format                   Format disk
+      --mkfs                     Use mkfs.ext2 to format disk
+  -c, --cache                    Enable caching
+      --cache_size <CACHE_SIZE>  Size of cache in blocks [default: 32]
+  -r, --read_only                Mount as read only filesystem
+  -v, --verbose                  Print more debug information, or set `RUST_LOG=debug`
+  -q, --quiet                    Do not print logs
+      --latency                  Enable disk latency
+  -d, --device <FILE>            Device path (filesystem storage file) [default: ddriver]
+  -s, --size <DISK_SIZE>         Size of disk in MiB [default: 4]
+      --unit <UNIT>              IO unit of disk in bytes [default: 512]
+  -l, --layout <FILE>            Select layout file for formatting disk [default: none]
+  -h, --help                     Print help information
+  -V, --version                  Print version information
 $ 
 ```
 
