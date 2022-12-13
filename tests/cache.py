@@ -38,7 +38,7 @@ def process(loop, cblks):
     print('Time: {}ms BW: {}MB/s'.format(1000 * (end - start), tot_sz / 1024 / 1024 / (end - start)))
 
 
-# loop = 1000000
-loop = 100000
+loop = 1000000
+# loop = 100000
 process(loop, 512)
 process(loop, 0)

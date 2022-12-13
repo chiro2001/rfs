@@ -90,3 +90,17 @@ mkfs.ext2 ~/ddriver -t ext2 -r 0
 ```
 
 经测试其和本项目中的文件系统是兼容的。不过因为其会占用部分保留 inode 和 data block，而且会生成 `lost+found`，故测试时还需要使用程序内的格式化逻辑。
+
+### 缓存设计
+
+```
+Cache Blks: 512
+   Compiling rfs v0.1.0 (/home/chiro/os/fuse-ext2/fs/rfs/rfs)
+    Finished release [optimized] target(s) in 8.25s
+     Running `target/release/rfs --format -q -c --cache_size 512 /home/chiro/mnt`
+Time: 41083.648681640625ms BW: 190.1608121649437MB/s
+Cache Blks: 0
+    Finished release [optimized] target(s) in 0.05s
+     Running `target/release/rfs --format -q /home/chiro/mnt`
+Time: 86539.66689109802ms BW: 90.27652035951665MB/s
+```
