@@ -122,7 +122,7 @@ impl<T: DiskDriver> RFS<T> {
     /// Get disk unit, available after init
     fn disk_block_size(&self) -> usize { self.driver_info.consts.iounit_size as usize }
 
-    /// Get disk sizs, available after init
+    /// Get disk size, available after init
     fn disk_size(&self) -> usize { self.driver_info.consts.layout_size as usize }
 
     /// Get filesystem block size, available after init

@@ -95,6 +95,7 @@ impl<T: DiskDriver> CacheDiskDriver<T> {
                     // let address = tag * self.info.unit as u64;
                     debug!("cache write back to {:x}", address);
                     let unit = self.info.unit as usize;
+                    self.inner.ddriver_seek(address as i64, SeekType::Set)?;
                     self.inner.ddriver_write(&item.data, unit)?;
                 }
             }
