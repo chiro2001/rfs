@@ -117,9 +117,9 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
     }
 
     fn ddriver_seek(&mut self, offset: i64, whence: SeekType) -> Result<u64> {
-        if whence == SeekType::Set {
-            debug!("cache seek to {:x}", offset);
-        }
+        // if whence == SeekType::Set {
+        //     debug!("cache seek to {:x}", offset);
+        // }
         match whence {
             SeekType::Set => self.offset = offset,
             SeekType::Cur => self.offset += offset,
@@ -134,7 +134,7 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
         let unit = self.info.unit as usize;
         let unit_log = self.block_log;
         assert_eq!(0, size % unit);
-        debug!("cache writing data at {:x}, size: {:x}:", self.offset, size);
+        // debug!("cache writing data at {:x}, size: {:x}:", self.offset, size);
         // show_hex_debug(&buf[..0x20], 0x10);
         if size != unit {
             warn!("not read one disk block! size = 0x{:x}", size);
@@ -146,23 +146,23 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
         } else {
             let tag = self.get_offset_tag();
             let search = self.cache.get_mut(&tag);
-            debug!("cache search tag: {:x}", tag);
+            // debug!("cache search tag: {:x}", tag);
             match search {
                 Some(item) => {
-                    debug!("write hit!");
+                    // debug!("write hit!");
                     item.data.copy_from_slice(buf);
                     item.dirty = true;
-                    debug!("write updated:");
+                    // debug!("write updated:");
                     // show_hex_debug(&item.data[..0x20], 0x10);
                     self.offset += unit as i64;
                     Ok(unit)
                 }
                 None => {
-                    debug!("write miss!");
+                    // debug!("write miss!");
                     let mut data = vec![0 as u8; unit];
                     // do not need to read again, new write will cover
                     data.copy_from_slice(buf);
-                    debug!("write newed:");
+                    // debug!("write newed:");
                     // show_hex_debug(&data[..0x20], 0x10);
                     let replaced = self.cache.push(tag, CacheItem { data, dirty: true });
                     self.write_back_item(replaced)?;
@@ -191,17 +191,17 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
         } else {
             let tag = self.get_offset_tag();
             let search = self.cache.get(&tag);
-            debug!("cache search tag: {:x}", tag);
+            // debug!("cache search tag: {:x}", tag);
             match search {
                 Some(item) => {
-                    debug!("read hit!");
+                    // debug!("read hit!");
                     buf.copy_from_slice(&item.data);
                     // show_hex_debug(&item.data[..0x20], 0x10);
                     self.offset += unit as i64;
                     Ok(unit)
                 }
                 None => {
-                    debug!("read miss!");
+                    // debug!("read miss!");
                     self.inner.ddriver_seek(self.offset, SeekType::Set)?;
                     let mut data = vec![0 as u8; unit];
                     let sz = self.inner.ddriver_read(&mut data, size)?;
@@ -236,7 +236,7 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
             if !item.dirty { continue; }
             let address = tag << self.block_log;
             self.inner.ddriver_seek(address as i64, SeekType::Set)?;
-            show_hex_debug(&item.data[..0x20], 0x10);
+            // show_hex_debug(&item.data[..0x20], 0x10);
             self.inner.ddriver_write(&item.data, item.data.len())?;
         }
         self.cache.clear();

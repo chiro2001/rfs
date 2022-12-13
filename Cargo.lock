@@ -739,6 +739,7 @@ dependencies = [
  "num_enum",
  "rand",
  "retry",
+ "zerocopy",
 ]
 
 [[package]]

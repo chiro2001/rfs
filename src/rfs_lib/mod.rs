@@ -728,6 +728,8 @@ impl<T: DiskDriver> RFS<T> {
             inode.i_size = self.block_size() as u32;
         } else if node_type == Ext2FileType::RegularFile {
             inode.i_block[0] = self.allocate_block()? as u32;
+        } else if node_type == Ext2FileType::Symlink {
+            // do not allocate blocks
         } else {
             panic!("unsupported type {:?}!", node_type);
         }
@@ -1274,16 +1276,25 @@ impl<T: DiskDriver> RFS<T> {
         // debug!("get file inode");
         // let inode = self.get_inode(d.inode as usize)?;
         debug!("unset bitmaps");
-        let mut remove_blocks = vec![];
-        self.visit_blocks_inode(d.inode as usize, 0, &mut |block, index| {
-            debug!("remove walk to block {} index {}", block, index);
-            if block != 0 {
-                remove_blocks.push(block);
+        let file_type = Ext2FileType::try_from(d.file_type as usize).unwrap();
+        match file_type {
+            Ext2FileType::RegularFile | Ext2FileType::Directory => {
+                let mut remove_blocks = vec![];
+                self.visit_blocks_inode(d.inode as usize, 0, &mut |block, index| {
+                    debug!("remove walk to block {} index {}", block, index);
+                    if block != 0 {
+                        remove_blocks.push(block);
+                    }
+                    Ok((block != 0, false))
+                })?;
+                for b in remove_blocks {
+                    Self::bitmap_unset(&mut self.bitmap_data, b);
+                }
             }
-            Ok((block != 0, false))
-        })?;
-        for b in remove_blocks {
-            Self::bitmap_unset(&mut self.bitmap_data, b);
+            Ext2FileType::Symlink => {
+                // link name stored in blocks, ignore release
+            }
+            _ => {}
         }
         Self::bitmap_unset(&mut self.bitmap_inode, d.inode as usize);
         let mut others = entries.into_iter().filter(|x| x.inode != d.inode).collect::<Vec<_>>();
@@ -1313,5 +1324,24 @@ impl<T: DiskDriver> RFS<T> {
         self.format_directory_entries(&mut entries_new)?;
         self.apply_directory_entries(newparent, &entries_new, 0)?;
         Ok(())
+    }
+
+    pub fn rfs_symlink(&mut self, parent: usize, name: &str, link: &str) -> Result<(usize, Ext2INode)> {
+        let (ino, mut inode) = self.make_node(parent, name, 0xfff, Ext2FileType::Symlink)?;
+        // fill link path to i_block
+        let link_raw_data = link.as_bytes();
+        let link_name_words = (link_raw_data.len() / 4) + (if link_raw_data.len() % 4 == 0 { 0 } else { 1 });
+        let mut link_data = vec![0 as u32; link_name_words];
+        let mut buf_u32 = [0 as u8; 4];
+        for i in 0..link_name_words {
+            let left = i * 4;
+            let right = min(i * 4 + 4, link_raw_data.len());
+            buf_u32.copy_from_slice(&[0 as u8; 4]);
+            buf_u32[..(right - left)].copy_from_slice(&link_raw_data[left..right]);
+            link_data[i] = u32::from_le_bytes(buf_u32);
+        }
+        inode.i_block[..link_data.len()].copy_from_slice(&link_data);
+        self.set_inode(ino, &inode)?;
+        Ok((ino, inode))
     }
 }

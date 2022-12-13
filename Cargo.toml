@@ -26,6 +26,7 @@ log = "0.4.17"
 num = "0.4.0"
 num_enum = "0.5.7"
 fuser = "0.11.1"
+zerocopy = "0.6.1"
 
 [lib]
 crate-type = ["staticlib", "rlib"]

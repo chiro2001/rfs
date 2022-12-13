@@ -1,5 +1,7 @@
 /// FUSE operations.
 use std::ffi::OsStr;
+use std::path::Path;
+use zerocopy::AsBytes;
 use std::time::SystemTime;
 use disk_driver::DiskDriver;
 use fuser::{Filesystem, KernelConfig, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry, ReplyWrite, Request, TimeOrNow};
@@ -49,6 +51,17 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
         reply.attr(&TTL, &attr);
     }
 
+    fn readlink(&mut self, _req: &Request<'_>, ino: u64, reply: ReplyData) {
+        rep!(reply, inode, self.get_inode(ino as usize));
+        let data = inode.i_block.to_vec().as_bytes().to_vec().into_iter().collect::<Vec<u8>>();
+        let mut i = 0;
+        while data[i] != 0 && i < data.len() {
+            i += 1;
+        }
+        warn!("read link: {}", String::from_utf8(data.clone()).unwrap());
+        reply.data(&data[..i]);
+    }
+
     fn mknod(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, mode: u32, _umask: u32, _rdev: u32, reply: ReplyEntry) {
         prv!("mknod", parent, name, mode);
         let parent = RFS::<T>::shift_ino(parent as usize);
@@ -77,6 +90,19 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
     fn rmdir(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, reply: ReplyEmpty) {
         rep!(reply, self.rfs_rmdir(parent as usize, name.to_str().unwrap()));
         reply.ok();
+    }
+
+    fn symlink(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, link: &Path, reply: ReplyEntry) {
+        prv!("symlink", parent, name, link);
+        let link = link.to_str().unwrap();
+        assert!(link.len() <= 60);
+        let parent = RFS::<T>::shift_ino(parent as usize);
+        rep!(reply, inode_info, self.rfs_symlink(parent, name.to_str().unwrap(), link.to_string().as_str()));
+        let (ino, inode) = inode_info;
+        rep!(reply, self.set_inode(ino, &inode));
+        let attr = inode.to_attr(ino, self.block_size());
+        reply.entry(&TTL, &attr, 0);
+        debug!("symlink done");
     }
 
     fn rename(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr, newparent: u64, newname: &OsStr, _flags: u32, reply: ReplyEmpty) {

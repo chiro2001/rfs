@@ -133,7 +133,9 @@ fn main() -> Result<()> {
     }
 
     let read_only = matches.get_flag("read_only");
-    let options = vec![if read_only { MountOption::RO } else { MountOption::RW }, MountOption::FSName("rfs".parse()?)];
+    let options = vec![
+        if read_only { MountOption::RO } else { MountOption::RW },
+        MountOption::FSName("rfs".parse()?)];
     let retry_times = 3;
     match if matches.get_flag("front") { Ok(Fork::Child) } else { fork() } {
         Ok(Fork::Parent(child)) => {
