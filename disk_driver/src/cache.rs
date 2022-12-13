@@ -125,7 +125,7 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
             SeekType::Cur => self.offset += offset,
             SeekType::End => self.offset = self.info.size as i64 - offset,
         };
-        self.inner.ddriver_seek(offset, whence)?;
+        // self.inner.ddriver_seek(offset, whence)?;
         // what's meaning?
         Ok(self.offset as u64)
     }
@@ -159,10 +159,8 @@ impl<T: DiskDriver> DiskDriver for CacheDiskDriver<T> {
                 }
                 None => {
                     debug!("write miss!");
-                    self.inner.ddriver_seek(self.offset, SeekType::Set)?;
                     let mut data = vec![0 as u8; unit];
                     // do not need to read again, new write will cover
-                    // let sz = self.inner.ddriver_read(&mut data, size)?;
                     data.copy_from_slice(buf);
                     debug!("write newed:");
                     // show_hex_debug(&data[..0x20], 0x10);

@@ -44,6 +44,8 @@ fn main() -> Result<()> {
             .required(false))
         .arg(arg!(-q --quiet "Do not print logs").action(ArgAction::SetTrue)
             .required(false))
+        .arg(arg!(--latency "Enable disk latency").action(ArgAction::SetTrue)
+            .required(false))
         .arg(
             arg!(-d --device <FILE> "Device path (filesystem storage file)")
                 .required(false)
@@ -94,6 +96,7 @@ fn main() -> Result<()> {
     let disk_size = matches.get_one::<u32>("size").unwrap().clone() * 0x400 * 0x400;
     let disk_unit = matches.get_one::<u32>("unit").unwrap().clone();
     let cache_size = matches.get_one::<u32>("cache_size").unwrap().clone();
+    let latency = matches.get_flag("latency").clone();
 
     macro_rules! umount {
         () => {
@@ -142,10 +145,12 @@ fn main() -> Result<()> {
                 info!("[try {}/{}] Mount to {}", current_try, retry_times, abspath_mountpoint);
                 let res = if ENABLE_CACHING.read().unwrap().clone() {
                     mount2(RFS::new(CacheDiskDriver::new(
-                        FileDiskDriver::new("", disk_size, disk_unit), cache_size as usize)
+                        FileDiskDriver::new("", disk_size, disk_unit, latency), cache_size as usize)
                     ), abspath_mountpoint, &options)
                 } else {
-                    mount2(RFS::new(FileDiskDriver::new("", disk_size, disk_unit)), abspath_mountpoint, &options)
+                    mount2(RFS::new(
+                        FileDiskDriver::new("", disk_size, disk_unit, latency)),
+                           abspath_mountpoint, &options)
                 };
                 match res {
                     Ok(_) => {

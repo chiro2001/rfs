@@ -764,12 +764,16 @@ impl<T: DiskDriver> RFS<T> {
 
     pub fn allocate_block(&mut self) -> Result<usize> {
         let block = self.get_group_desc().bg_block_bitmap as usize;
-        self.allocate_bitmap(block, true)
+        let r = self.allocate_bitmap(block, true)?;
+        self.super_block.s_free_blocks_count -= 1;
+        Ok(r)
     }
 
     pub fn allocate_inode(&mut self) -> Result<usize> {
         let block = self.get_group_desc().bg_inode_bitmap as usize;
-        self.allocate_bitmap(block, false)
+        let r = self.allocate_bitmap(block, false)?;
+        self.super_block.s_free_inodes_count -= 1;
+        Ok(r)
     }
 
     fn read_super_block(&mut self) -> Result<Ext2SuperBlock> {

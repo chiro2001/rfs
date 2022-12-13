@@ -7,16 +7,16 @@ f_path = mnt_point + '/file'
 
 
 def process(loop, cblks):
-    print(f"Cache Blks: {cblks}")
+    print(f"Test loop: {loop}, Cache Blks: {cblks}")
     work_set_sz = 16 * 512  # 8KB
     iter_sz = 512  # 512B
     num_iters = work_set_sz // iter_sz
     tot_sz = loop * work_set_sz  # B
     start = time.time()
     if cblks != 0:
-        os.system(f'cargo run --release -- --format -q -c --cache_size {cblks} {mnt_point}')
+        os.system(f'cargo run --release -- --format -q --latency -c --cache_size {cblks} {mnt_point}')
     else:
-        os.system(f'cargo run --release -- --format -q {mnt_point}')
+        os.system(f'cargo run --release -- --format -q --latency {mnt_point}')
     # print("started")
     time.sleep(1)
     with open(f_path, 'w+') as f:
@@ -38,7 +38,7 @@ def process(loop, cblks):
     print('Time: {}ms BW: {}MB/s'.format(1000 * (end - start), tot_sz / 1024 / 1024 / (end - start)))
 
 
-loop = 1000000
-# loop = 100000
+# loop = 1000000
+loop = 100000
 process(loop, 512)
-process(loop, 0)
+process(loop // 1000, 0)
