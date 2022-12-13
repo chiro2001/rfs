@@ -6,19 +6,18 @@ mnt_point = '/home/chiro/mnt'
 f_path = mnt_point + '/file'
 
 
-def process(loop, cblks):
+def process(loop: int, cblks: int, latency: bool):
     print(f"Test loop: {loop}, Cache Blks: {cblks}")
     work_set_sz = 16 * 512  # 8KB
     iter_sz = 512  # 512B
     num_iters = work_set_sz // iter_sz
     tot_sz = loop * work_set_sz  # B
-    start = time.time()
-    if cblks != 0:
-        os.system(f'cargo run --release -- --format -q --latency -c --cache_size {cblks} {mnt_point}')
-    else:
-        os.system(f'cargo run --release -- --format -q --latency {mnt_point}')
+    latency_args = '--latency' if latency else ''
+    cache_size_args = f'-c --cache_size {cblks}' if cblks > 0 else ''
+    os.system(f'cargo run --release -- --format -q {latency_args} {cache_size_args} {mnt_point}')
     # print("started")
     time.sleep(1)
+    start = time.time()
     with open(f_path, 'w+') as f:
         content = 'a' * work_set_sz
         for i in range(loop):
@@ -38,7 +37,8 @@ def process(loop, cblks):
     print('Time: {}ms BW: {}MB/s'.format(1000 * (end - start), tot_sz / 1024 / 1024 / (end - start)))
 
 
-# loop = 1000000
-loop = 100000
-process(loop, 512)
-process(loop // 1000, 0)
+loop = 1000000
+process(loop, 512, False)
+process(loop // 10, 0, False)
+process(loop, 512, True)
+process(loop // 10000, 0, True)

@@ -93,14 +93,28 @@ mkfs.ext2 ~/ddriver -t ext2 -r 0
 
 ### 缓存设计
 
+关闭模拟磁盘延迟：
+
 ```
-Cache Blks: 512
-   Compiling rfs v0.1.0 (/home/chiro/os/fuse-ext2/fs/rfs/rfs)
-    Finished release [optimized] target(s) in 8.25s
+Test loop: 1000000, Cache Blks: 512
+    Finished release [optimized] target(s) in 0.05s
      Running `target/release/rfs --format -q -c --cache_size 512 /home/chiro/mnt`
-Time: 41083.648681640625ms BW: 190.1608121649437MB/s
-Cache Blks: 0
+Time: 30815.510034561157ms BW: 253.52492920733374MB/s
+Test loop: 100000, Cache Blks: 0
     Finished release [optimized] target(s) in 0.05s
      Running `target/release/rfs --format -q /home/chiro/mnt`
-Time: 86539.66689109802ms BW: 90.27652035951665MB/s
+Time: 8691.662073135376ms BW: 89.88499477156695MB/s
+```
+
+打开模拟磁盘延迟：
+
+```
+Test loop: 1000000, Cache Blks: 512
+    Finished release [optimized] target(s) in 0.06s
+     Running `target/release/rfs --format -q --latency -c --cache_size 512 /home/chiro/mnt`
+Time: 30927.71863937378ms BW: 252.6051174707074MB/s
+Test loop: 100, Cache Blks: 0
+    Finished release [optimized] target(s) in 0.05s
+     Running `target/release/rfs --format -q --latency /home/chiro/mnt`
+Time: 9035.56513786316ms BW: 0.08646387780728894MB/s
 ```
