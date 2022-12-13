@@ -767,6 +767,7 @@ impl<T: DiskDriver> RFS<T> {
     pub fn allocate_block(&mut self) -> Result<usize> {
         let block = self.get_group_desc().bg_block_bitmap as usize;
         let r = self.allocate_bitmap(block, true)?;
+        debug!("allocate new block: {}", r);
         self.super_block.s_free_blocks_count -= 1;
         Ok(r)
     }
@@ -774,6 +775,7 @@ impl<T: DiskDriver> RFS<T> {
     pub fn allocate_inode(&mut self) -> Result<usize> {
         let block = self.get_group_desc().bg_inode_bitmap as usize;
         let r = self.allocate_bitmap(block, false)?;
+        debug!("allocate new ino: {}", r);
         self.super_block.s_free_inodes_count -= 1;
         Ok(r)
     }
@@ -1129,6 +1131,10 @@ impl<T: DiskDriver> RFS<T> {
                 block, index, will_continue, (index+1) * sz, (index+1) * sz - offset, blocks.len() * sz);
             if block == 0 {
                 debug!("zero block!");
+                if will_continue {
+                    blocks.push(usize::MAX);
+                    last_index = index;
+                }
                 return Ok((will_continue, false));
             }
             blocks.push(block);
@@ -1150,8 +1156,14 @@ impl<T: DiskDriver> RFS<T> {
         let mut data: Vec<u8> = [0 as u8].repeat(size);
         for (i, block) in blocks.iter().enumerate() {
             // if i * sz >= size { break; }
+            let block = *block;
             let right = min((i + 1) * sz, size);
-            self.read_data_block(*block, &mut data[(i * sz)..right])?;
+            if block == usize::MAX {
+                // this is an un-allocated block but use zero data
+                data[(i * sz)..right].copy_from_slice(&[0 as u8].repeat(sz));
+            } else {
+                self.read_data_block(block, &mut data[(i * sz)..right])?;
+            }
             offset += right - (i * sz);
         }
         Ok(data)
@@ -1164,7 +1176,7 @@ impl<T: DiskDriver> RFS<T> {
             debug!("unaligned write! offset=0x{:x}, len={}", offset, size);
             let sz_log = int_log2(sz as u64) as usize;
             let offset_aligned = down_align(offset as usize, sz_log);
-            let size_aligned = up_align(size, sz_log);
+            let size_aligned = up_align(size, sz_log) + sz;
             let mut data_read = self.rfs_read(ino, offset_aligned as i64, size_aligned as u32)?;
             // let mut data_read = self.rfs_read(ino, offset_aligned as i64, size as u32)?;
             data_read[(offset as usize - offset_aligned)..(size + offset as usize - offset_aligned)].copy_from_slice(data);

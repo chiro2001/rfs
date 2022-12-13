@@ -110,7 +110,6 @@ impl<T: DiskDriver> Filesystem for RFS<T> {
         reply.ok();
     }
 
-
     fn read(&mut self, _req: &Request<'_>, ino: u64, _fh: u64, offset: i64, size: u32,
             _flags: i32, _lock_owner: Option<u64>, reply: ReplyData) {
         prv!("read", ino, offset, size);
